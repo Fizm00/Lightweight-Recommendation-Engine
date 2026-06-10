@@ -7,11 +7,14 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/nano-recommender">
-    <img src="https://img.shields.io/badge/npm-v1.0.0-312e81?style=flat-square" alt="npm version" />
+  <a href="https://www.npmjs.com/package/@fizm/nano-recommender">
+    <img src="https://img.shields.io/npm/v/@fizm/nano-recommender?color=312e81&style=flat-square" alt="npm version" />
   </a>
-  <a href="https://bundlephobia.com/package/nano-recommender">
-    <img src="https://img.shields.io/badge/bundle--size-7.3%20kB%20(minzipped)-312e81?style=flat-square" alt="bundle size" />
+  <a href="https://bundlephobia.com/package/@fizm/nano-recommender">
+    <img src="https://img.shields.io/bundlephobia/minzip/@fizm/nano-recommender?color=312e81&style=flat-square" alt="bundle size" />
+  </a>
+  <a href="https://www.npmjs.com/package/@fizm/nano-recommender">
+    <img src="https://img.shields.io/npm/dm/@fizm/nano-recommender?color=312e81&style=flat-square" alt="downloads" />
   </a>
   <a href="https://github.com/Fizm00/Lightweight-Recommendation-Engine/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-312e81?style=flat-square" alt="license" />
@@ -60,19 +63,19 @@ It is designed for use-cases requiring rapid collaborative filtering and fallbac
 Install via npm:
 
 ```bash
-npm install nano-recommender
+npm install @fizm/nano-recommender
 ```
 
 Install via pnpm:
 
 ```bash
-pnpm add nano-recommender
+pnpm add @fizm/nano-recommender
 ```
 
 Install via yarn:
 
 ```bash
-yarn add nano-recommender
+yarn add @fizm/nano-recommender
 ```
 
 ---
@@ -82,7 +85,7 @@ yarn add nano-recommender
 The following is a complete, compilable TypeScript example showing how to load a dataset and generate recommendations.
 
 ```typescript
-import { NanoRecommender } from "nano-recommender";
+import { NanoRecommender } from "@fizm/nano-recommender";
 
 // 1. Initialize the engine
 const recommender = new NanoRecommender({
@@ -120,13 +123,13 @@ The package supports both ESM and CommonJS formats.
 ### ESM Import (Default)
 
 ```typescript
-import { NanoRecommender, cosineSimilarity } from "nano-recommender";
+import { NanoRecommender, cosineSimilarity } from "@fizm/nano-recommender";
 ```
 
 ### CommonJS Require
 
 ```javascript
-const { NanoRecommender, cosineSimilarity } = require("nano-recommender");
+const { NanoRecommender, cosineSimilarity } = require("@fizm/nano-recommender");
 ```
 
 ---
@@ -150,7 +153,7 @@ const recs = recommender.recommendItemBased("user_id", {
 Finds users similar to the target user and recommends items they liked. It supports custom similarity functions (e.g. Cosine, Jaccard).
 
 ```typescript
-import { jaccardSimilarity } from "nano-recommender";
+import { jaccardSimilarity } from "@fizm/nano-recommender";
 
 const recs = recommender.recommendUserBased("user_id", {
   limit: 10,
