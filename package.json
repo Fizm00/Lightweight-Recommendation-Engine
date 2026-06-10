@@ -1,0 +1,48 @@
+{
+  "name": "nano-recommender",
+  "version": "1.0.0",
+  "description": "Zero-dependency collaborative filtering recommendation engine built for performance",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "tsc --outDir temp-build && node --test temp-build/src/tests/matrix.test.js temp-build/src/tests/similarity.test.js temp-build/src/tests/item-based.test.js temp-build/src/tests/user-based.test.js temp-build/src/tests/popularity.test.js temp-build/src/tests/recommender.test.js temp-build/src/tests/cache.test.js",
+    "benchmark": "tsc --outDir temp-build && node --expose-gc temp-build/benchmarks/runner.js"
+  },
+  "keywords": [
+    "recommender",
+    "recommendation",
+    "collaborative-filtering",
+    "sparse-matrix",
+    "in-memory",
+    "typescript"
+  ],
+  "author": "nano-recommender contributors",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nano-recommender/nano-recommender.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nano-recommender/nano-recommender/issues"
+  },
+  "homepage": "https://github.com/nano-recommender/nano-recommender#readme",
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}
