@@ -33,12 +33,12 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nano-recommender/nano-recommender.git"
+    "url": "git+https://github.com/Fizm00/Lightweight-Recommendation-Engine.git"
   },
   "bugs": {
-    "url": "https://github.com/nano-recommender/nano-recommender/issues"
+    "url": "https://github.com/Fizm00/Lightweight-Recommendation-Engine/issues"
   },
-  "homepage": "https://github.com/nano-recommender/nano-recommender#readme",
+  "homepage": "https://github.com/Fizm00/Lightweight-Recommendation-Engine#readme",
   "devDependencies": {
     "@types/node": "^25.9.2",
     "ts-node": "^10.9.2",

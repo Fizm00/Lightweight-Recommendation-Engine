@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=rect&color=0:0f172a,100:312e81&height=180&section=header&text=nano-recommender&fontSize=50&fontAlignY=45&desc=Zero-dependency%20collaborative%20filtering%20engine%20for%20TypeScript&descAlignY=65&descAlign=50" width="100%"/>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,100:312e81&height=220&section=header&text=nano-recommender&fontSize=50&fontAlignY=40&desc=Zero-dependency%20collaborative%20filtering%20engine%20for%20TypeScript&descAlignY=60&descAlign=50&fontColor=ffffff&descColor=cbd5e1" width="100%"/>
 </p>
 
 <p align="center">
@@ -8,22 +8,19 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/nano-recommender">
-    <img src="https://img.shields.io/npm/v/nano-recommender?color=312e81&style=flat-square" alt="npm version" />
+    <img src="https://img.shields.io/badge/npm-v1.0.0-312e81?style=flat-square" alt="npm version" />
   </a>
   <a href="https://bundlephobia.com/package/nano-recommender">
-    <img src="https://img.shields.io/bundlephobia/minzip/nano-recommender?color=312e81&style=flat-square" alt="bundle size" />
+    <img src="https://img.shields.io/badge/bundle--size-7.3%20kB%20(minzipped)-312e81?style=flat-square" alt="bundle size" />
   </a>
-  <a href="https://www.npmjs.com/package/nano-recommender">
-    <img src="https://img.shields.io/npm/dm/nano-recommender?color=312e81&style=flat-square" alt="downloads" />
+  <a href="https://github.com/Fizm00/Lightweight-Recommendation-Engine/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-312e81?style=flat-square" alt="license" />
   </a>
-  <a href="https://github.com/nano-recommender/nano-recommender/blob/main/LICENSE">
-    <img src="https://img.shields.io/npm/l/nano-recommender?color=312e81&style=flat-square" alt="license" />
-  </a>
-  <a href="https://github.com/nano-recommender/nano-recommender">
+  <a href="https://github.com/Fizm00/Lightweight-Recommendation-Engine">
     <img src="https://img.shields.io/badge/typescript-%233178C6.svg?style=flat-square&logo=typescript&logoColor=white" alt="typescript" />
   </a>
-  <a href="https://github.com/nano-recommender/nano-recommender/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nano-recommender/nano-recommender/ci.yml?branch=main&style=flat-square" alt="build status" />
+  <a href="https://github.com/Fizm00/Lightweight-Recommendation-Engine/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/Fizm00/Lightweight-Recommendation-Engine/ci.yml?branch=main&style=flat-square" alt="build status" />
   </a>
 </p>
 
@@ -265,7 +262,7 @@ src/
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/nano-recommender/nano-recommender.git
+   git clone https://github.com/Fizm00/Lightweight-Recommendation-Engine.git
    ```
 2. Install dependencies:
    ```bash
