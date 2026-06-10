@@ -11,10 +11,7 @@
     <img src="https://img.shields.io/npm/v/@fizm/nano-recommender?color=312e81&style=flat-square" alt="npm version" />
   </a>
   <a href="https://bundlephobia.com/package/@fizm/nano-recommender">
-    <img src="https://img.shields.io/bundlephobia/minzip/@fizm/nano-recommender?color=312e81&style=flat-square" alt="bundle size" />
-  </a>
-  <a href="https://www.npmjs.com/package/@fizm/nano-recommender">
-    <img src="https://img.shields.io/npm/dm/@fizm/nano-recommender?color=312e81&style=flat-square" alt="downloads" />
+    <img src="https://img.shields.io/badge/bundle--size-7.3%20kB%20(minzipped)-312e81?style=flat-square" alt="bundle size" />
   </a>
   <a href="https://github.com/Fizm00/Lightweight-Recommendation-Engine/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-312e81?style=flat-square" alt="license" />
