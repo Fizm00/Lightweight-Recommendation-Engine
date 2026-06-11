@@ -51,6 +51,7 @@ It is designed for use-cases requiring rapid collaborative filtering and fallbac
 | **Popularity Fallback Engine**         |    Yes    | Handles cold-start users using view, rate, and purchase counts |
 | **Seeded/Symmetric Similarity Cache**  |    Yes    | Optimizes calculations using symmetric pair caching            |
 | **Sparse Storage Engine**              |    Yes    | Operates entirely in memory with sparse indices                |
+| **Time-Decay Weighting**               |    Yes    | Automatically decays older interaction ratings exponentially   |
 | **TypeScript Ready**                   |    Yes    | Written in strict TypeScript with full declaration files       |
 
 ---
@@ -169,6 +170,26 @@ const recs = recommender.recommend("new_user_id", {
 });
 ```
 
+### 4. Time-Decay Weighting
+
+To prevent recommendations from getting stale, you can configure an exponential decay half-life in days. Interactions will automatically have their ratings scaled down based on how old they are relative to the latest interaction in the dataset (or a custom reference time).
+
+```typescript
+const recommender = new NanoRecommender({
+  decayHalfLifeDays: 30, // 30-day half-life (interactions 30 days old decay to 50% weight)
+});
+
+recommender.load([
+  { userId: "u1", itemId: "i1", rating: 5.0, timestamp: "2026-06-12T00:00:00Z" },
+  { userId: "u1", itemId: "i2", rating: 5.0, timestamp: "2026-05-13T00:00:00Z" }, // ~30 days old -> scaled to 2.5
+]);
+```
+
+You can also supply a custom reference time:
+```typescript
+recommender.load(dataset, { referenceTime: new Date("2026-06-12T00:00:00Z") });
+```
+
 ---
 
 ## Performance
@@ -205,10 +226,11 @@ Instantiates the recommendation engine facade.
 - **`config.defaultSimilarityThreshold`**: `number`. Defaults to `0.0`.
 - **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
 - **`config.interactionWeights`**: `Record<string, number>`. Optional. Mapping of interaction types (e.g., `"purchase"`, `"view"`) to positive rating multipliers.
+- **`config.decayHalfLifeDays`**: `number`. Optional. Half-life in days for exponential time-decay weighting. Must be a positive number.
 
-#### `load(interactions: Interaction[]): void`
+#### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
-Clears existing interactions and loads a new batch dataset. Automatically applies weights from `interactionWeights` to scale interaction ratings, then invalidates (clears) similarity caches.
+Clears existing interactions and loads a new batch dataset. Automatically applies weights from `interactionWeights` and decays ratings based on `decayHalfLifeDays` relative to `options.referenceTime` (defaults to max timestamp or `Date.now()`). Invalidates (clears) similarity caches.
 
 #### `recommend(userId: string, options?: RecommendationOptions): Recommendation[]`
 

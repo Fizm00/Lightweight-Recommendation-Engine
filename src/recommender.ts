@@ -24,6 +24,8 @@ export interface NanoRecommenderConfig {
   readonly defaultFallbackStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "none";
   /** Optional weights mapping interaction types to rating multipliers. */
   readonly interactionWeights?: Record<string, number>;
+  /** Optional half-life in days for time-decay weighting. Must be a positive number. */
+  readonly decayHalfLifeDays?: number;
 }
 
 /**
@@ -62,6 +64,7 @@ export class NanoRecommender {
   private readonly defaultThreshold: number;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
   private readonly interactionWeights?: Record<string, number>;
+  private readonly decayHalfLifeDays?: number;
 
   /**
    * Constructs a new NanoRecommender instance.
@@ -84,32 +87,93 @@ export class NanoRecommender {
       }
       this.interactionWeights = config.interactionWeights;
     }
+
+    if (config.decayHalfLifeDays !== undefined) {
+      if (
+        typeof config.decayHalfLifeDays !== "number" ||
+        Number.isNaN(config.decayHalfLifeDays) ||
+        !Number.isFinite(config.decayHalfLifeDays) ||
+        config.decayHalfLifeDays <= 0
+      ) {
+        throw new ValidationError("decayHalfLifeDays must be a positive, finite number");
+      }
+      this.decayHalfLifeDays = config.decayHalfLifeDays;
+    }
   }
 
   /**
    * Clears the current interactions and loads a new batch bulk dataset.
    *
    * @param interactions The array of interactions to load.
+   * @param options Optional load configurations (e.g., custom referenceTime).
    */
-  public load(interactions: Interaction[]): void {
+  public load(
+    interactions: Interaction[],
+    options?: { readonly referenceTime?: number | string | Date }
+  ): void {
     if (!Array.isArray(interactions)) {
       throw new ValidationError("interactions must be an array");
     }
 
     this.matrix.clear();
 
-    const weightedInteractions = interactions.map(interaction => {
-      const type = interaction?.type;
-      if (type && this.interactionWeights && this.interactionWeights[type] !== undefined) {
-        return {
-          ...interaction,
-          rating: interaction.rating * this.interactionWeights[type],
-        };
+    let referenceTimeMs: number | null = null;
+    const parsedTimestamps = new Map<Interaction, number>();
+
+    if (this.decayHalfLifeDays !== undefined) {
+      if (options?.referenceTime !== undefined) {
+        referenceTimeMs = new Date(options.referenceTime).getTime();
+        if (Number.isNaN(referenceTimeMs) || !Number.isFinite(referenceTimeMs)) {
+          throw new ValidationError(`Invalid referenceTime: ${options.referenceTime}`);
+        }
       }
-      return interaction;
+
+      let maxTime = 0;
+      for (const interaction of interactions) {
+        if (interaction?.timestamp !== undefined) {
+          const t = new Date(interaction.timestamp).getTime();
+          if (Number.isNaN(t) || !Number.isFinite(t)) {
+            throw new ValidationError(`Invalid timestamp in interaction: ${interaction.timestamp}`);
+          }
+          parsedTimestamps.set(interaction, t);
+          if (t > maxTime) {
+            maxTime = t;
+          }
+        }
+      }
+
+      if (referenceTimeMs === null) {
+        referenceTimeMs = maxTime > 0 ? maxTime : Date.now();
+      }
+    }
+
+    const processedInteractions = interactions.map(interaction => {
+      if (!interaction) {
+        return interaction;
+      }
+
+      let rating = interaction.rating;
+      const type = interaction.type;
+
+      if (type && this.interactionWeights && this.interactionWeights[type] !== undefined) {
+        rating *= this.interactionWeights[type];
+      }
+
+      if (this.decayHalfLifeDays !== undefined && interaction.timestamp !== undefined && referenceTimeMs !== null) {
+        const interactionTimeMs = parsedTimestamps.get(interaction)!;
+        const elapsedMs = Math.max(0, referenceTimeMs - interactionTimeMs);
+        const halfLifeMs = this.decayHalfLifeDays * 24 * 60 * 60 * 1000;
+        const decayFactor = Math.pow(0.5, elapsedMs / halfLifeMs);
+        rating *= decayFactor;
+      }
+
+      return {
+        ...interaction,
+        rating,
+      };
     });
 
-    this.matrix.addInteractions(weightedInteractions);
+    this.matrix.addInteractions(processedInteractions);
     this.itemCache.clear();
     this.userCache.clear();
   }

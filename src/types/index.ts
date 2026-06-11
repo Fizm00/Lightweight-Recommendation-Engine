@@ -10,6 +10,8 @@ export interface Interaction {
   readonly rating: number;
   /** The type of interaction, e.g. 'view', 'purchase', 'rate'. */
   readonly type?: string;
+  /** The timestamp when the interaction occurred (Date, string, or number in milliseconds). */
+  readonly timestamp?: number | string | Date;
 }
 
 /**
