@@ -3,3 +3,4 @@ dist/
 *.log
 temp-build/
 .agents/
+RELEASE_CHECKLIST.md
