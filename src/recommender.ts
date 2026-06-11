@@ -1,5 +1,5 @@
 import { SparseMatrix } from "./core/matrix.js";
-import type { Interaction, Recommendation } from "./types/index.js";
+import type { Interaction, Recommendation, RecommenderState } from "./types/index.js";
 import {
   type ItemBasedRecommendationOptions,
   recommendForUser,
@@ -10,6 +10,7 @@ import {
 } from "./algorithms/user-based.js";
 import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popularity.js";
 import { SimilarityCache } from "./core/cache.js";
+import { ValidationError } from "./errors/index.js";
 
 /**
  * Configuration options for the NanoRecommender engine.
@@ -186,5 +187,42 @@ export class NanoRecommender {
       itemCount: this.matrix.getItemCount(),
       interactionCount: this.matrix.getInteractionCount(),
     };
+  }
+
+  /**
+   * Exports the entire internal state of the recommender engine.
+   *
+   * @returns The serialized RecommenderState object.
+   */
+  public export(): RecommenderState {
+    return {
+      version: "1",
+      matrix: this.matrix.exportState(),
+    };
+  }
+
+  /**
+   * Restores the recommender engine state from a serialized state.
+   * Invalidates internal similarity caches.
+   *
+   * @param state The serialized RecommenderState to import.
+   * @throws {ValidationError} If the state version is unsupported or payload is invalid.
+   */
+  public import(state: RecommenderState): void {
+    if (!state) {
+      throw new ValidationError("RecommenderState cannot be null or undefined");
+    }
+
+    if (state.version !== "1") {
+      throw new ValidationError(`Unsupported recommender state version: ${state.version}`);
+    }
+
+    if (!state.matrix) {
+      throw new ValidationError("RecommenderState is missing matrix payload");
+    }
+
+    this.matrix.importState(state.matrix);
+    this.itemCache.clear();
+    this.userCache.clear();
   }
 }

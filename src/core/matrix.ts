@@ -1,4 +1,4 @@
-import type { Interaction, SparseMatrixStorage } from "../types/index.js";
+import type { Interaction, SparseMatrixStorage, SerializedMatrixState } from "../types/index.js";
 import { InvalidInteractionError, ValidationError } from "../errors/index.js";
 
 /**
@@ -242,5 +242,135 @@ export class SparseMatrix {
    */
   public getPurchasesCountMap(): ReadonlyMap<string, number> {
     return this.purchasesCount;
+  }
+
+  /**
+   * Exports the internal sparse matrix representation to a JSON-compatible object.
+   *
+   * @returns The serialized state of the sparse matrix.
+   */
+  public exportState(): SerializedMatrixState {
+    const storageRecord: Record<string, Record<string, number>> = {};
+    for (const [userId, userVector] of this.storage.entries()) {
+      const userRecord: Record<string, number> = {};
+      for (const [itemId, rating] of userVector.entries()) {
+        userRecord[itemId] = rating;
+      }
+      storageRecord[userId] = userRecord;
+    }
+
+    const ratingsCountRecord: Record<string, number> = {};
+    for (const [itemId, count] of this.ratingsCount.entries()) {
+      ratingsCountRecord[itemId] = count;
+    }
+
+    const viewsCountRecord: Record<string, number> = {};
+    for (const [itemId, count] of this.viewsCount.entries()) {
+      viewsCountRecord[itemId] = count;
+    }
+
+    const purchasesCountRecord: Record<string, number> = {};
+    for (const [itemId, count] of this.purchasesCount.entries()) {
+      purchasesCountRecord[itemId] = count;
+    }
+
+    return {
+      storage: storageRecord,
+      ratingsCount: ratingsCountRecord,
+      viewsCount: viewsCountRecord,
+      purchasesCount: purchasesCountRecord,
+    };
+  }
+
+  /**
+   * Clears the current matrix and restores it from a serialized state.
+   *
+   * @param state The serialized state of the sparse matrix to restore.
+   * @throws {ValidationError} If the state payload is invalid or corrupt.
+   */
+  public importState(state: SerializedMatrixState): void {
+    if (!state) {
+      throw new ValidationError("Serialized state cannot be null or undefined");
+    }
+
+    if (
+      typeof state.storage !== "object" ||
+      state.storage === null ||
+      typeof state.ratingsCount !== "object" ||
+      state.ratingsCount === null ||
+      typeof state.viewsCount !== "object" ||
+      state.viewsCount === null ||
+      typeof state.purchasesCount !== "object" ||
+      state.purchasesCount === null
+    ) {
+      throw new ValidationError("Invalid serialized state structure");
+    }
+
+    this.clear();
+
+    try {
+      // Restore storage
+      for (const [userId, userRecord] of Object.entries(state.storage)) {
+        if (typeof userId !== "string" || userId.trim() === "") {
+          throw new ValidationError("Invalid userId in serialized storage");
+        }
+        if (typeof userRecord !== "object" || userRecord === null) {
+          throw new ValidationError(`Invalid user record for user ${userId}`);
+        }
+
+        const userVector = new Map<string, number>();
+        for (const [itemId, rating] of Object.entries(userRecord)) {
+          if (typeof itemId !== "string" || itemId.trim() === "") {
+            throw new ValidationError(`Invalid itemId in user record for user ${userId}`);
+          }
+          if (typeof rating !== "number" || Number.isNaN(rating) || !Number.isFinite(rating)) {
+            throw new ValidationError(`Invalid rating for item ${itemId} and user ${userId}`);
+          }
+          userVector.set(itemId, rating);
+          this.itemIndex.add(itemId);
+          this.interactionCount++;
+        }
+        this.storage.set(userId, userVector);
+      }
+
+      // Restore ratingsCount
+      for (const [itemId, count] of Object.entries(state.ratingsCount)) {
+        if (typeof itemId !== "string" || itemId.trim() === "") {
+          throw new ValidationError("Invalid itemId in ratingsCount");
+        }
+        if (typeof count !== "number" || Number.isNaN(count) || !Number.isFinite(count) || count < 0) {
+          throw new ValidationError(`Invalid ratingsCount for item ${itemId}`);
+        }
+        this.ratingsCount.set(itemId, count);
+      }
+
+      // Restore viewsCount
+      for (const [itemId, count] of Object.entries(state.viewsCount)) {
+        if (typeof itemId !== "string" || itemId.trim() === "") {
+          throw new ValidationError("Invalid itemId in viewsCount");
+        }
+        if (typeof count !== "number" || Number.isNaN(count) || !Number.isFinite(count) || count < 0) {
+          throw new ValidationError(`Invalid viewsCount for item ${itemId}`);
+        }
+        this.viewsCount.set(itemId, count);
+      }
+
+      // Restore purchasesCount
+      for (const [itemId, count] of Object.entries(state.purchasesCount)) {
+        if (typeof itemId !== "string" || itemId.trim() === "") {
+          throw new ValidationError("Invalid itemId in purchasesCount");
+        }
+        if (typeof count !== "number" || Number.isNaN(count) || !Number.isFinite(count) || count < 0) {
+          throw new ValidationError(`Invalid purchasesCount for item ${itemId}`);
+        }
+        this.purchasesCount.set(itemId, count);
+      }
+    } catch (error) {
+      this.clear(); // Clean up partial state if error occurs
+      if (error instanceof ValidationError) {
+        throw error;
+      }
+      throw new ValidationError(`Error importing matrix state: ${(error as Error).message}`);
+    }
   }
 }

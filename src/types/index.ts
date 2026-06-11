@@ -31,3 +31,27 @@ export type UserVector = Map<string, number>;
  * The sparse matrix representation mapping user IDs to their respective user vectors.
  */
 export type SparseMatrixStorage = Map<string, UserVector>;
+
+/**
+ * Represents the serialized state of the sparse matrix storage.
+ */
+export interface SerializedMatrixState {
+  /** The nested matrix mapping user ID to items and ratings. */
+  readonly storage: Record<string, Record<string, number>>;
+  /** The item rating frequencies mapped by item ID. */
+  readonly ratingsCount: Record<string, number>;
+  /** The item view frequencies mapped by item ID. */
+  readonly viewsCount: Record<string, number>;
+  /** The item purchase frequencies mapped by item ID. */
+  readonly purchasesCount: Record<string, number>;
+}
+
+/**
+ * Represents the full serialized state of the recommendation engine.
+ */
+export interface RecommenderState {
+  /** The version of the serialization format schema. */
+  readonly version: string;
+  /** The serialized state of the sparse matrix. */
+  readonly matrix: SerializedMatrixState;
+}
