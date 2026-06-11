@@ -204,10 +204,11 @@ Instantiates the recommendation engine facade.
 - **`config.defaultStrategy`**: `"item-based" | "user-based"`. Defaults to `"item-based"`.
 - **`config.defaultSimilarityThreshold`**: `number`. Defaults to `0.0`.
 - **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
+- **`config.interactionWeights`**: `Record<string, number>`. Optional. Mapping of interaction types (e.g., `"purchase"`, `"view"`) to positive rating multipliers.
 
 #### `load(interactions: Interaction[]): void`
 
-Clears existing interactions and loads a new batch dataset. Automatically invalidates (clears) similarity caches.
+Clears existing interactions and loads a new batch dataset. Automatically applies weights from `interactionWeights` to scale interaction ratings, then invalidates (clears) similarity caches.
 
 #### `recommend(userId: string, options?: RecommendationOptions): Recommendation[]`
 
