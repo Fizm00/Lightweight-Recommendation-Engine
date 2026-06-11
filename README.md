@@ -28,30 +28,30 @@
 
 ## Why nano-recommender
 
-The library is a lightweight, zero-dependency, in-memory recommendation engine built to run efficiently in Node.js and browser environments. 
+The library is a lightweight, zero-dependency, in-memory recommendation engine built to run efficiently in Node.js and browser environments.
 
 It is designed for use-cases requiring rapid collaborative filtering and fallback recommendations without the overhead of heavy native dependencies, external databases, or machine learning pipelines.
 
 ### Design Pillars
 
-* **Zero Runtime Dependencies**: Avoids dependency bloat. Relies entirely on native JavaScript and TypeScript features.
-* **Sparse Matrix Optimization**: Ratings are stored in memory using sparse user-item maps and item-user indices, minimizing memory overhead and avoiding dense matrix allocations.
-* **Symmetric Similarity Cache**: Pairwise similarities are computed lazily on demand and cached symmetrically, reducing subsequent query times to O(1) lookups.
-* **Dual Packaging**: Ships with full ESM and CommonJS support alongside native TypeScript typings out of the box.
-* **Tree-shakable Exports**: Algorithms and core utility classes are exported individually, allowing modern bundlers to remove unused code.
+- **Zero Runtime Dependencies**: Avoids dependency bloat. Relies entirely on native JavaScript and TypeScript features.
+- **Sparse Matrix Optimization**: Ratings are stored in memory using sparse user-item maps and item-user indices, minimizing memory overhead and avoiding dense matrix allocations.
+- **Symmetric Similarity Cache**: Pairwise similarities are computed lazily on demand and cached symmetrically, reducing subsequent query times to O(1) lookups.
+- **Dual Packaging**: Ships with full ESM and CommonJS support alongside native TypeScript typings out of the box.
+- **Tree-shakable Exports**: Algorithms and core utility classes are exported individually, allowing modern bundlers to remove unused code.
 
 ---
 
 ## Features
 
-| Feature | Supported | Description |
-| :--- | :---: | :--- |
-| **Item-Based Collaborative Filtering** | Yes | Recommends items based on item-item similarity matrices |
-| **User-Based Collaborative Filtering** | Yes | Recommends items based on user-user similarity matrices |
-| **Popularity Fallback Engine** | Yes | Handles cold-start users using view, rate, and purchase counts |
-| **Seeded/Symmetric Similarity Cache** | Yes | Optimizes calculations using symmetric pair caching |
-| **Sparse Storage Engine** | Yes | Operates entirely in memory with sparse indices |
-| **TypeScript Ready** | Yes | Written in strict TypeScript with full declaration files |
+| Feature                                | Supported | Description                                                    |
+| :------------------------------------- | :-------: | :------------------------------------------------------------- |
+| **Item-Based Collaborative Filtering** |    Yes    | Recommends items based on item-item similarity matrices        |
+| **User-Based Collaborative Filtering** |    Yes    | Recommends items based on user-user similarity matrices        |
+| **Popularity Fallback Engine**         |    Yes    | Handles cold-start users using view, rate, and purchase counts |
+| **Seeded/Symmetric Similarity Cache**  |    Yes    | Optimizes calculations using symmetric pair caching            |
+| **Sparse Storage Engine**              |    Yes    | Operates entirely in memory with sparse indices                |
+| **TypeScript Ready**                   |    Yes    | Written in strict TypeScript with full declaration files       |
 
 ---
 
@@ -177,19 +177,19 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 
 ### Loading & Memory Footprint
 
-| Scale | Users | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 1,000 | 100 | 10,000 | 2.84 ms | 3,520,755 | 1.75 MB | 0.55 MB |
-| **Medium** | 10,000 | 1,000 | 100,000 | 20.47 ms | 4,885,818 | 16.56 MB | 31.28 MB |
-| **Large** | 100,000 | 5,000 | 1,000,000 | 228.75 ms | 4,371,610 | 165.98 MB | 325.79 MB |
+| Scale      |  Users  | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
+| :--------- | :-----: | :---: | :----------: | :-------: | :-----------------: | :-----------------: | :-----------------: |
+| **Small**  |  1,000  |  100  |    10,000    |  2.84 ms  |      3,520,755      |       1.75 MB       |       0.55 MB       |
+| **Medium** | 10,000  | 1,000 |   100,000    | 20.47 ms  |      4,885,818      |      16.56 MB       |      31.28 MB       |
+| **Large**  | 100,000 | 5,000 |  1,000,000   | 228.75 ms |      4,371,610      |      165.98 MB      |      325.79 MB      |
 
 ### Recommendation Latency (Item-Based)
 
-| Scale | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Speedup Factor |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 1.56 ms | 3.21 ms | 1.17 ms | 1.41 ms | 1.3x |
-| **Medium** | 32.23 ms | 46.70 ms | 15.94 ms | 17.77 ms | 2.0x |
-| **Large** | 784.14 ms | 1,022.55 ms | 334.23 ms | 419.22 ms | 2.3x |
+| Scale      | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Speedup Factor |
+| :--------- | :------------: | :------------: | :-----------: | :-----------: | :------------: |
+| **Small**  |    1.56 ms     |    3.21 ms     |    1.17 ms    |    1.41 ms    |      1.3x      |
+| **Medium** |    32.23 ms    |    46.70 ms    |   15.94 ms    |   17.77 ms    |      2.0x      |
+| **Large**  |   784.14 ms    |  1,022.55 ms   |   334.23 ms   |   419.22 ms   |      2.3x      |
 
 ---
 
@@ -198,34 +198,41 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 ### `class NanoRecommender`
 
 #### `constructor(config?: NanoRecommenderConfig)`
+
 Instantiates the recommendation engine facade.
 
-* **`config.defaultStrategy`**: `"item-based" | "user-based"`. Defaults to `"item-based"`.
-* **`config.defaultSimilarityThreshold`**: `number`. Defaults to `0.0`.
-* **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
+- **`config.defaultStrategy`**: `"item-based" | "user-based"`. Defaults to `"item-based"`.
+- **`config.defaultSimilarityThreshold`**: `number`. Defaults to `0.0`.
+- **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
 
 #### `load(interactions: Interaction[]): void`
+
 Clears existing interactions and loads a new batch dataset. Automatically invalidates (clears) similarity caches.
 
 #### `recommend(userId: string, options?: RecommendationOptions): Recommendation[]`
+
 Generates recommendation array for a user. Automatically delegates to the selected strategy, falling back to popularity engine if the user has no history.
 
-* **`options.strategy`**: `"item-based" | "user-based"`.
-* **`options.limit`**: `number` (default: `10`).
-* **`options.similarityThreshold`**: `number` (default: `0.0`).
-* **`options.excludeInteracted`**: `boolean` (default: `true`).
-* **`options.fallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`.
+- **`options.strategy`**: `"item-based" | "user-based"`.
+- **`options.limit`**: `number` (default: `10`).
+- **`options.similarityThreshold`**: `number` (default: `0.0`).
+- **`options.excludeInteracted`**: `boolean` (default: `true`).
+- **`options.fallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`.
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
+
 Directly triggers Item-Based Collaborative Filtering.
 
 #### `recommendUserBased(userId: string, options?: UserBasedRecommendationOptions): Recommendation[]`
+
 Directly triggers User-Based Collaborative Filtering.
 
 #### `clear(): void`
+
 Pushes the engine to a clean state. Clears sparse matrix storage and deletes similarity cache instances.
 
 #### `stats(): RecommenderStats`
+
 Returns descriptive summary statistics (`userCount`, `itemCount`, `interactionCount`).
 
 ---
