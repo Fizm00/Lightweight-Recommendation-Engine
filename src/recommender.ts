@@ -22,6 +22,8 @@ export interface NanoRecommenderConfig {
   readonly defaultSimilarityThreshold?: number;
   /** The default fallback strategy for cold start users. Defaults to 'most-rated'. */
   readonly defaultFallbackStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "none";
+  /** Optional weights mapping interaction types to rating multipliers. */
+  readonly interactionWeights?: Record<string, number>;
 }
 
 /**
@@ -59,6 +61,7 @@ export class NanoRecommender {
   private readonly defaultStrategy: "item-based" | "user-based";
   private readonly defaultThreshold: number;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
+  private readonly interactionWeights?: Record<string, number>;
 
   /**
    * Constructs a new NanoRecommender instance.
@@ -69,6 +72,18 @@ export class NanoRecommender {
     this.defaultStrategy = config.defaultStrategy ?? "item-based";
     this.defaultThreshold = config.defaultSimilarityThreshold ?? 0.0;
     this.defaultFallback = config.defaultFallbackStrategy ?? "most-rated";
+
+    if (config.interactionWeights) {
+      if (typeof config.interactionWeights !== "object" || config.interactionWeights === null) {
+        throw new ValidationError("interactionWeights must be a valid object");
+      }
+      for (const [type, weight] of Object.entries(config.interactionWeights)) {
+        if (typeof weight !== "number" || Number.isNaN(weight) || !Number.isFinite(weight) || weight <= 0) {
+          throw new ValidationError(`Weight for interaction type '${type}' must be a positive, finite number`);
+        }
+      }
+      this.interactionWeights = config.interactionWeights;
+    }
   }
 
   /**
@@ -77,8 +92,24 @@ export class NanoRecommender {
    * @param interactions The array of interactions to load.
    */
   public load(interactions: Interaction[]): void {
+    if (!Array.isArray(interactions)) {
+      throw new ValidationError("interactions must be an array");
+    }
+
     this.matrix.clear();
-    this.matrix.addInteractions(interactions);
+
+    const weightedInteractions = interactions.map(interaction => {
+      const type = interaction?.type;
+      if (type && this.interactionWeights && this.interactionWeights[type] !== undefined) {
+        return {
+          ...interaction,
+          rating: interaction.rating * this.interactionWeights[type],
+        };
+      }
+      return interaction;
+    });
+
+    this.matrix.addInteractions(weightedInteractions);
     this.itemCache.clear();
     this.userCache.clear();
   }

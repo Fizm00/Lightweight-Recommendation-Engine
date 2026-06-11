@@ -235,6 +235,14 @@ Pushes the engine to a clean state. Clears sparse matrix storage and deletes sim
 
 Returns descriptive summary statistics (`userCount`, `itemCount`, `interactionCount`).
 
+#### `export(): RecommenderState`
+
+Exports the entire internal state of the recommender engine (including sparse matrix, item index, and popularity metrics) to a JSON-serializable object.
+
+#### `import(state: RecommenderState): void`
+
+Restores the recommender engine state from a serialized state object. Automatically invalidates internal similarity caches. Throws a `ValidationError` if the version or structure is invalid.
+
 ---
 
 ## Architecture
