@@ -24,6 +24,24 @@
   </a>
 </p>
 
+## Table of Contents
+
+- [Why nano-recommender](#why-nano-recommender)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Packaging Support](#packaging-support)
+- [Recommendation Strategies](#recommendation-strategies)
+  - [Item-Based Collaborative Filtering](#1-item-based-collaborative-filtering-default)
+  - [User-Based Collaborative Filtering](#2-user-based-collaborative-filtering)
+  - [Popularity & Cold Start Fallbacks](#3-popularity--cold-start-fallbacks)
+  - [Time-Decay Weighting](#4-time-decay-weighting)
+- [Performance](#performance)
+- [API Reference](#api-reference)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [License](#license)
+
 ---
 
 ## Why nano-recommender
