@@ -10,6 +10,7 @@ import { InvalidInteractionError, ValidationError } from "../errors/index.js";
 export class SparseMatrix {
   private readonly storage: SparseMatrixStorage = new Map();
   private readonly itemIndex: Set<string> = new Set();
+  private readonly transpose: Map<string, Map<string, number>> = new Map();
   private interactionCount = 0;
   private readonly ratingsCount = new Map<string, number>();
   private readonly viewsCount = new Map<string, number>();
@@ -40,6 +41,14 @@ export class SparseMatrix {
 
     userVector.set(itemId, rating);
     this.itemIndex.add(itemId);
+
+    // Update transpose matrix dynamically
+    let itemVector = this.transpose.get(itemId);
+    if (!itemVector) {
+      itemVector = new Map<string, number>();
+      this.transpose.set(itemId, itemVector);
+    }
+    itemVector.set(userId, rating);
 
     if (type === "view") {
       this.viewsCount.set(itemId, (this.viewsCount.get(itemId) ?? 0) + 1);
@@ -202,6 +211,7 @@ export class SparseMatrix {
   public clear(): void {
     this.storage.clear();
     this.itemIndex.clear();
+    this.transpose.clear();
     this.interactionCount = 0;
     this.ratingsCount.clear();
     this.viewsCount.clear();
@@ -242,6 +252,15 @@ export class SparseMatrix {
    */
   public getPurchasesCountMap(): ReadonlyMap<string, number> {
     return this.purchasesCount;
+  }
+
+  /**
+   * Retrieves the transpose matrix representation (item -> user -> rating).
+   *
+   * @returns The read-only transposed matrix.
+   */
+  public getTransposeMatrix(): ReadonlyMap<string, ReadonlyMap<string, number>> {
+    return this.transpose;
   }
 
   /**
@@ -329,6 +348,14 @@ export class SparseMatrix {
           userVector.set(itemId, rating);
           this.itemIndex.add(itemId);
           this.interactionCount++;
+
+          // Update transpose matrix dynamically during import
+          let itemVector = this.transpose.get(itemId);
+          if (!itemVector) {
+            itemVector = new Map<string, number>();
+            this.transpose.set(itemId, itemVector);
+          }
+          itemVector.set(userId, rating);
         }
         this.storage.set(userId, userVector);
       }

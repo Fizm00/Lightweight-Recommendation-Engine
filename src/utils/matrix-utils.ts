@@ -7,21 +7,10 @@ import type { Recommendation } from "../types/index.js";
  * @param matrix The sparse interaction matrix.
  * @returns The transposed matrix mapping item IDs to their user-rating maps.
  */
-export function buildTransposeMatrix(matrix: SparseMatrix): Map<string, Map<string, number>> {
-  const transpose = new Map<string, Map<string, number>>();
-  for (const userId of matrix.getUserIds()) {
-    const userVector = matrix.getUserVector(userId);
-    if (!userVector) continue;
-    for (const [itemId, rating] of userVector.entries()) {
-      let itemVector = transpose.get(itemId);
-      if (!itemVector) {
-        itemVector = new Map<string, number>();
-        transpose.set(itemId, itemVector);
-      }
-      itemVector.set(userId, rating);
-    }
-  }
-  return transpose;
+export function buildTransposeMatrix(
+  matrix: SparseMatrix
+): ReadonlyMap<string, ReadonlyMap<string, number>> {
+  return matrix.getTransposeMatrix();
 }
 
 /**

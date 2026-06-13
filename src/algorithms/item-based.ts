@@ -37,7 +37,7 @@ export interface ItemBasedRecommendationOptions {
 function findCandidateItems(
   matrix: SparseMatrix,
   userVector: ReadonlyMap<string, number>,
-  transpose: Map<string, Map<string, number>>,
+  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   excludeInteracted: boolean
 ): Set<string> {
   const candidates = new Set<string>();
@@ -71,7 +71,7 @@ function findCandidateItems(
 function scoreCandidate(
   userVector: ReadonlyMap<string, number>,
   candidateId: string,
-  transpose: Map<string, Map<string, number>>,
+  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   similarityThreshold: number,
   simFn: SimilarityFunction,
   cache?: SimilarityCache

@@ -33,7 +33,7 @@ export interface UserBasedRecommendationOptions {
  */
 function findSimilarUsers(
   userVector: ReadonlyMap<string, number>,
-  transpose: Map<string, Map<string, number>>,
+  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   userId: string
 ): Set<string> {
   const similarUsers = new Set<string>();
@@ -124,7 +124,7 @@ function findCandidateItemsUB(
  */
 function scoreCandidateUB(
   candidateId: string,
-  transpose: Map<string, Map<string, number>>,
+  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   userSimilarities: Map<string, number>
 ): number | undefined {
   let weightedSum = 0;
@@ -153,7 +153,7 @@ function scoreCandidateUB(
  */
 function scoreCandidatesUB(
   candidates: Set<string>,
-  transpose: Map<string, Map<string, number>>,
+  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   userSimilarities: Map<string, number>
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];

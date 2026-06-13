@@ -239,17 +239,17 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 
 | Scale      |  Users  | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
 | :--------- | :-----: | :---: | :----------: | :-------: | :-----------------: | :-----------------: | :-----------------: |
-| **Small**  |  1,000  |  100  |    10,000    |  2.84 ms  |      3,520,755      |       1.75 MB       |       0.55 MB       |
-| **Medium** | 10,000  | 1,000 |   100,000    | 20.47 ms  |      4,885,818      |      16.56 MB       |      31.28 MB       |
-| **Large**  | 100,000 | 5,000 |  1,000,000   | 228.75 ms |      4,371,610      |      165.98 MB      |      325.79 MB      |
+| **Small**  |  1,000  |  100  |    10,000    |  5.17 ms  |      1,933,712      |       2.12 MB       |       2.14 MB       |
+| **Medium** | 10,000  | 1,000 |   100,000    | 41.81 ms  |      2,391,641      |      20.10 MB       |      158.90 MB      |
+| **Large**  | 100,000 | 5,000 |  1,000,000   | 708.87 ms |      1,410,706      |      200.68 MB      |     1,508.78 MB     |
 
 ### Recommendation Latency (Item-Based)
 
 | Scale      | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Speedup Factor |
 | :--------- | :------------: | :------------: | :-----------: | :-----------: | :------------: |
-| **Small**  |    1.56 ms     |    3.21 ms     |    1.17 ms    |    1.41 ms    |      1.3x      |
-| **Medium** |    32.23 ms    |    46.70 ms    |   15.94 ms    |   17.77 ms    |      2.0x      |
-| **Large**  |   784.14 ms    |  1,022.55 ms   |   334.23 ms   |   419.22 ms   |      2.3x      |
+| **Small**  |    0.80 ms     |    2.49 ms     |    0.55 ms    |    0.79 ms    |      1.5x      |
+| **Medium** |    28.60 ms    |    53.69 ms    |    6.70 ms    |    7.61 ms    |      4.3x      |
+| **Large**  |   539.49 ms    |   632.14 ms    |   54.23 ms    |   68.19 ms    |      9.9x      |
 
 ---
 
@@ -311,6 +311,14 @@ Exports the entire internal state of the recommender engine (including sparse ma
 #### `import(state: RecommenderState): void`
 
 Restores the recommender engine state from a serialized state object. Automatically invalidates internal similarity caches. Throws a `ValidationError` if the version or structure is invalid.
+
+### Similarity Functions
+
+The library exports the following built-in similarity algorithms that satisfy the `SimilarityFunction` interface:
+
+- **`cosineSimilarity`**: Computes standard Cosine Similarity between two sparse vectors.
+- **`jaccardSimilarity`**: Computes Jaccard Similarity coefficient based on the overlap of rated item sets (ignores rating values).
+- **`pearsonCorrelation`**: Computes Pearson Correlation Coefficient by mean-centering the vectors before calculating cosine similarity, normalizing user rating scale bias.
 
 ---
 
