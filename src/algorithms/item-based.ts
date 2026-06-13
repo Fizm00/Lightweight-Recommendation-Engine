@@ -1,5 +1,6 @@
 import { SparseMatrix } from "../core/matrix.js";
 import type { Recommendation } from "../types/index.js";
+import type { SimilarityFunction } from "./similarity.js";
 import { cosineSimilarity } from "./cosine.js";
 import { buildTransposeMatrix, sortAndLimit } from "../utils/matrix-utils.js";
 import type { SimilarityCache } from "../core/cache.js";
@@ -14,6 +15,8 @@ export interface ItemBasedRecommendationOptions {
   readonly similarityThreshold?: number;
   /** Whether to exclude items the user has already interacted with. Defaults to true. */
   readonly excludeInteracted?: boolean;
+  /** The similarity function to use. Defaults to cosineSimilarity. */
+  readonly similarityFunction?: SimilarityFunction;
 }
 
 
@@ -57,6 +60,8 @@ function findCandidateItems(
  * @param candidateId The candidate item ID to predict score for.
  * @param transpose The transposed item-user matrix.
  * @param similarityThreshold The minimum similarity threshold.
+ * @param simFn The similarity function to use.
+ * @param cache Optional similarity cache.
  * @returns The predicted rating score, or undefined if no neighbors found.
  */
 function scoreCandidate(
@@ -64,6 +69,7 @@ function scoreCandidate(
   candidateId: string,
   transpose: Map<string, Map<string, number>>,
   similarityThreshold: number,
+  simFn: SimilarityFunction,
   cache?: SimilarityCache
 ): number | undefined {
   let weightedSum = 0;
@@ -76,7 +82,7 @@ function scoreCandidate(
     if (!itemVector) continue;
     let sim = cache?.get(itemId, candidateId);
     if (sim === undefined) {
-      sim = cosineSimilarity(itemVector, candidateVector);
+      sim = simFn(itemVector, candidateVector);
       cache?.set(itemId, candidateId, sim);
     }
     if (sim >= similarityThreshold) {
@@ -110,13 +116,14 @@ export function recommendForUser(
   const limit = options.limit ?? 10;
   const threshold = options.similarityThreshold ?? 0.0;
   const exclude = options.excludeInteracted ?? true;
+  const simFn = options.similarityFunction ?? cosineSimilarity;
 
   const transpose = buildTransposeMatrix(matrix);
   const candidates = findCandidateItems(matrix, userVector, transpose, exclude);
   const recommendations: Recommendation[] = [];
 
   for (const candidateId of candidates) {
-    const score = scoreCandidate(userVector, candidateId, transpose, threshold, cache);
+    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, cache);
     if (score !== undefined) {
       recommendations.push({ itemId: candidateId, score });
     }

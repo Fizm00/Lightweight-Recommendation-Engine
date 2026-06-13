@@ -1,0 +1,71 @@
+import type { SimilarityFunction } from "./similarity.js";
+
+/**
+ * Calculates the Pearson Correlation Coefficient between two sparse vectors.
+ *
+ * It subtracts the mean rating of each vector from its components (mean-centering)
+ * before calculating the cosine similarity.
+ *
+ * Returns 0.0 if either vector has a magnitude of 0.0 (e.g. all ratings are the same)
+ * or if there are no items in common or if either vector is empty.
+ *
+ * @param vectorA The first sparse vector.
+ * @param vectorB The second sparse vector.
+ * @returns The Pearson Correlation coefficient.
+ */
+export const pearsonCorrelation: SimilarityFunction = (vectorA, vectorB) => {
+  if (vectorA.size === 0 || vectorB.size === 0) {
+    return 0.0;
+  }
+
+  // Calculate mean of vectorA
+  let sumA = 0;
+  for (const rating of vectorA.values()) {
+    sumA += rating;
+  }
+  const meanA = sumA / vectorA.size;
+
+  // Calculate mean of vectorB
+  let sumB = 0;
+  for (const rating of vectorB.values()) {
+    sumB += rating;
+  }
+  const meanB = sumB / vectorB.size;
+
+  // Calculate magnitudes of mean-centered vectors
+  let sumSqA = 0;
+  for (const rating of vectorA.values()) {
+    const diff = rating - meanA;
+    sumSqA += diff * diff;
+  }
+  const magnitudeA = Math.sqrt(sumSqA);
+
+  let sumSqB = 0;
+  for (const rating of vectorB.values()) {
+    const diff = rating - meanB;
+    sumSqB += diff * diff;
+  }
+  const magnitudeB = Math.sqrt(sumSqB);
+
+  // Avoid division by zero
+  if (magnitudeA === 0 || magnitudeB === 0) {
+    return 0.0;
+  }
+
+  // Calculate dot product of mean-centered vectors (only on intersection)
+  // Optimize by iterating over the smaller vector
+  const [smaller, larger, meanSmall, meanLarge] =
+    vectorA.size < vectorB.size
+      ? [vectorA, vectorB, meanA, meanB]
+      : [vectorB, vectorA, meanB, meanA];
+
+  let dotProduct = 0;
+  for (const [itemId, ratingSmall] of smaller.entries()) {
+    const ratingLarge = larger.get(itemId);
+    if (ratingLarge !== undefined) {
+      dotProduct += (ratingSmall - meanSmall) * (ratingLarge - meanLarge);
+    }
+  }
+
+  return dotProduct / (magnitudeA * magnitudeB);
+};

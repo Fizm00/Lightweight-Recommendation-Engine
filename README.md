@@ -139,13 +139,13 @@ The package supports both ESM and CommonJS formats.
 ### ESM Import (Default)
 
 ```typescript
-import { NanoRecommender, cosineSimilarity } from "@fizm/nano-recommender";
+import { NanoRecommender, cosineSimilarity, pearsonCorrelation } from "@fizm/nano-recommender";
 ```
 
 ### CommonJS Require
 
 ```javascript
-const { NanoRecommender, cosineSimilarity } = require("@fizm/nano-recommender");
+const { NanoRecommender, cosineSimilarity, pearsonCorrelation } = require("@fizm/nano-recommender");
 ```
 
 ---
@@ -154,19 +154,22 @@ const { NanoRecommender, cosineSimilarity } = require("@fizm/nano-recommender");
 
 ### 1. Item-Based Collaborative Filtering (Default)
 
-Finds items similar to those the user has already rated. It uses Cosine Similarity over sparse item vectors and computes predicted ratings using a weighted average.
+Finds items similar to those the user has already rated. It supports custom similarity functions (e.g. Cosine, Pearson) over sparse item vectors and computes predicted ratings using a weighted average.
 
 ```typescript
+import { pearsonCorrelation } from "@fizm/nano-recommender";
+
 const recs = recommender.recommendItemBased("user_id", {
   limit: 10,
   similarityThreshold: 0.1,
   excludeInteracted: true,
+  similarityFunction: pearsonCorrelation,
 });
 ```
 
 ### 2. User-Based Collaborative Filtering
 
-Finds users similar to the target user and recommends items they liked. It supports custom similarity functions (e.g. Cosine, Jaccard).
+Finds users similar to the target user and recommends items they liked. It supports custom similarity functions (e.g. Cosine, Jaccard, Pearson).
 
 ```typescript
 import { jaccardSimilarity } from "@fizm/nano-recommender";
@@ -305,6 +308,7 @@ src/
 │   ├── similarity.ts  # Similarity definitions
 │   ├── cosine.ts      # Cosine similarity
 │   ├── jaccard.ts     # Jaccard similarity
+│   ├── pearson.ts     # Pearson correlation
 │   ├── item-based.ts  # Item-based collaborative filtering
 │   ├── user-based.ts  # User-based collaborative filtering
 │   └── popularity.ts  # Popularity ranking indices
