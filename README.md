@@ -211,6 +211,24 @@ You can also supply a custom reference time:
 recommender.load(dataset, { referenceTime: new Date("2026-06-12T00:00:00Z") });
 ```
 
+### 5. Recommendation Filtering & Blacklisting
+
+You can dynamically filter recommendations based on custom criteria (e.g. stock availability, age rating) or supply an explicit list of item IDs to exclude (blacklist):
+
+```typescript
+const recs = recommender.recommend("user_id", {
+  strategy: "item-based",
+  // Exclude explicit list of item IDs (blacklist)
+  excludeItemIds: ["item_out_of_stock_1", "item_out_of_stock_2"],
+  // Custom filter callback (keep item if it returns true)
+  filter: (itemId) => {
+    const isAdultOnly = checkAdultCategory(itemId);
+    const isUserMinor = checkUserIsMinor("user_id");
+    return !(isAdultOnly && isUserMinor);
+  }
+});
+```
+
 ---
 
 ## Performance
@@ -267,14 +285,16 @@ Generates recommendation array for a user. Automatically delegates to the select
 - **`options.similarityThreshold`**: `number` (default: `0.0`).
 - **`options.excludeInteracted`**: `boolean` (default: `true`).
 - **`options.fallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`.
+- **`options.excludeItemIds`**: `string[]`. Optional. List of item IDs to blacklist/exclude from the recommendations.
+- **`options.filter`**: `(itemId: string) => boolean`. Optional. Custom callback to dynamically filter item recommendations (keep when `true`, exclude when `false`).
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 
-Directly triggers Item-Based Collaborative Filtering.
+Directly triggers Item-Based Collaborative Filtering. Accepts all filtering options (`excludeItemIds`, `filter`).
 
 #### `recommendUserBased(userId: string, options?: UserBasedRecommendationOptions): Recommendation[]`
 
-Directly triggers User-Based Collaborative Filtering.
+Directly triggers User-Based Collaborative Filtering. Accepts all filtering options (`excludeItemIds`, `filter`).
 
 #### `clear(): void`
 

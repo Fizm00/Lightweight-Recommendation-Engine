@@ -272,7 +272,7 @@ export class NanoRecommender {
     const limit = options.limit ?? 10;
 
     if (!userVector || userVector.size === 0) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit);
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, options);
     }
 
     const strategy = options.strategy ?? this.defaultStrategy;
@@ -290,16 +290,17 @@ export class NanoRecommender {
    */
   private handleColdStart(
     strategy: "most-rated" | "most-viewed" | "most-purchased" | "none",
-    limit: number
+    limit: number,
+    options: RecommendationOptions = {}
   ): Recommendation[] {
     if (strategy === "most-viewed") {
-      return getMostViewed(this.matrix, limit);
+      return getMostViewed(this.matrix, limit, options);
     }
     if (strategy === "most-purchased") {
-      return getMostPurchased(this.matrix, limit);
+      return getMostPurchased(this.matrix, limit, options);
     }
     if (strategy === "most-rated") {
-      return getMostRated(this.matrix, limit);
+      return getMostRated(this.matrix, limit, options);
     }
     return [];
   }

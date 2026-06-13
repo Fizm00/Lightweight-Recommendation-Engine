@@ -17,6 +17,10 @@ export interface UserBasedRecommendationOptions {
   readonly excludeInteracted?: boolean;
   /** The similarity function to use. Defaults to cosineSimilarity. */
   readonly similarityFunction?: SimilarityFunction;
+  /** Optional filter function to include/exclude item IDs. */
+  readonly filter?: (itemId: string) => boolean;
+  /** Optional array of item IDs to exclude from recommendations. */
+  readonly excludeItemIds?: string[];
 }
 
 /**
@@ -192,7 +196,18 @@ export function recommendFromSimilarUsers(
     cache
   );
   const candidates = findCandidateItemsUB(userSimilarities, matrix, userVector, options.excludeInteracted ?? true);
-  const recommendations = scoreCandidatesUB(candidates, transpose, userSimilarities);
+
+  const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
+  const filterFn = options.filter;
+
+  const filteredCandidates = new Set<string>();
+  for (const candidateId of candidates) {
+    if (excludeSet && excludeSet.has(candidateId)) continue;
+    if (filterFn && !filterFn(candidateId)) continue;
+    filteredCandidates.add(candidateId);
+  }
+
+  const recommendations = scoreCandidatesUB(filteredCandidates, transpose, userSimilarities);
 
   return sortAndLimit(recommendations, options.limit ?? 10);
 }
