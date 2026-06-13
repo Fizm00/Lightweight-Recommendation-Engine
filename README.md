@@ -250,6 +250,10 @@ Instantiates the recommendation engine facade.
 
 Clears existing interactions and loads a new batch dataset. Automatically applies weights from `interactionWeights` and decays ratings based on `decayHalfLifeDays` relative to `options.referenceTime` (defaults to max timestamp or `Date.now()`). Invalidates (clears) similarity caches.
 
+#### `addInteraction(interaction: Interaction): void`
+
+Adds or updates a single user-item interaction in real-time. Automatically applies weights from `interactionWeights` and decays the rating based on `decayHalfLifeDays` relative to the engine's last reference time. Updates the sparse matrix and selectively invalidates only the similarity cache entries associated with the affected user and item, maintaining high retrieval performance for other queries.
+
 #### `recommend(userId: string, options?: RecommendationOptions): Recommendation[]`
 
 Generates recommendation array for a user. Automatically delegates to the selected strategy, falling back to popularity engine if the user has no history.
