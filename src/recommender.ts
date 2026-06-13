@@ -26,6 +26,8 @@ export interface NanoRecommenderConfig {
   readonly interactionWeights?: Record<string, number>;
   /** Optional half-life in days for time-decay weighting. Must be a positive number. */
   readonly decayHalfLifeDays?: number;
+  /** Optional capacity limit for similarity caches. Must be a positive integer. */
+  readonly maxSimilarityCacheSize?: number;
 }
 
 /**
@@ -58,8 +60,8 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
  */
 export class NanoRecommender {
   private readonly matrix = new SparseMatrix();
-  private readonly itemCache = new SimilarityCache();
-  private readonly userCache = new SimilarityCache();
+  private readonly itemCache: SimilarityCache;
+  private readonly userCache: SimilarityCache;
   private readonly defaultStrategy: "item-based" | "user-based";
   private readonly defaultThreshold: number;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
@@ -100,6 +102,23 @@ export class NanoRecommender {
       }
       this.decayHalfLifeDays = config.decayHalfLifeDays;
     }
+
+    let maxCacheSize: number | undefined;
+    if (config.maxSimilarityCacheSize !== undefined) {
+      if (
+        typeof config.maxSimilarityCacheSize !== "number" ||
+        Number.isNaN(config.maxSimilarityCacheSize) ||
+        !Number.isFinite(config.maxSimilarityCacheSize) ||
+        !Number.isInteger(config.maxSimilarityCacheSize) ||
+        config.maxSimilarityCacheSize <= 0
+      ) {
+        throw new ValidationError("maxSimilarityCacheSize must be a positive integer");
+      }
+      maxCacheSize = config.maxSimilarityCacheSize;
+    }
+
+    this.itemCache = new SimilarityCache(maxCacheSize);
+    this.userCache = new SimilarityCache(maxCacheSize);
   }
 
   /**

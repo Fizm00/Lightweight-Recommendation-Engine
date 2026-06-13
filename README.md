@@ -245,6 +245,7 @@ Instantiates the recommendation engine facade.
 - **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
 - **`config.interactionWeights`**: `Record<string, number>`. Optional. Mapping of interaction types (e.g., `"purchase"`, `"view"`) to positive rating multipliers.
 - **`config.decayHalfLifeDays`**: `number`. Optional. Half-life in days for exponential time-decay weighting. Must be a positive number.
+- **`config.maxSimilarityCacheSize`**: `number`. Optional. Maximum number of entries in the similarity cache. Once exceeded, the least recently used entries are evicted (LRU eviction).
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
