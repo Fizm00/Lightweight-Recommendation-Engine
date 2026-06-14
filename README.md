@@ -261,14 +261,16 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 
 Instantiates the recommendation engine facade.
 
-- **`config.defaultStrategy`**: `"item-based" | "user-based"`. Defaults to `"item-based"`.
-- **`config.defaultSimilarityThreshold`**: `number`. Defaults to `0.0`.
-- **`config.defaultFallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`. Defaults to `"most-rated"`.
-- **`config.interactionWeights`**: `Record<string, number>`. Optional. Mapping of interaction types (e.g., `"purchase"`, `"view"`) to positive rating multipliers.
-- **`config.decayHalfLifeDays`**: `number`. Optional. Half-life in days for exponential time-decay weighting. Must be a positive number.
-- **`config.maxSimilarityCacheSize`**: `number`. Optional. Maximum number of entries in the similarity cache. Once exceeded, the least recently used entries are evicted (LRU eviction).
-- **`config.defaultMinIntersectionSize`**: `number`. Optional. The default minimum number of shared items/users required to compute similarity. Defaults to `1`.
-- **`config.defaultK`**: `number`. Optional. The default neighborhood limit (k) to use in recommendation calculations. Must be a positive integer.
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `defaultStrategy` | `"item-based" \| "user-based"` | `"item-based"` | The default strategy to use in the `recommend()` method. |
+| `defaultSimilarityThreshold` | `number` | `0.0` | The default similarity threshold score between entities. |
+| `defaultMinIntersectionSize` | `number` | `1` | The default minimum number of shared items/users required to compute similarity. |
+| `defaultK` | `number` | `undefined` | The default neighborhood limit (K) to use in recommendation calculations. |
+| `defaultFallbackStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `"most-rated"` | The default fallback strategy for cold start users. |
+| `interactionWeights` | `Record<string, number>` | `undefined` | Optional mapping of interaction types to positive rating multipliers. |
+| `decayHalfLifeDays` | `number` | `undefined` | Optional half-life in days for exponential time-decay weighting. |
+| `maxSimilarityCacheSize` | `number` | `undefined` | Optional capacity limit for similarity cache (LRU eviction). |
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
@@ -282,15 +284,17 @@ Adds or updates a single user-item interaction in real-time. Automatically appli
 
 Generates recommendation array for a user. Automatically delegates to the selected strategy, falling back to popularity engine if the user has no history.
 
-- **`options.strategy`**: `"item-based" | "user-based"`.
-- **`options.limit`**: `number` (default: `10`).
-- **`options.similarityThreshold`**: `number` (default: `0.0`).
-- **`options.excludeInteracted`**: `boolean` (default: `true`).
-- **`options.fallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`.
-- **`options.excludeItemIds`**: `string[]`. Optional. List of item IDs to blacklist/exclude from the recommendations.
-- **`options.filter`**: `(itemId: string) => boolean`. Optional. Custom callback to dynamically filter item recommendations (keep when `true`, exclude when `false`).
-- **`options.minIntersectionSize`**: `number`. Optional. The minimum number of shared items/users required to compute similarity. Defaults to constructor's `defaultMinIntersectionSize`.
-- **`options.k`**: `number`. Optional. Limit the similarity calculations or candidate selection to the top K nearest neighbors. Defaults to constructor's `defaultK`.
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `strategy` | `"item-based" \| "user-based"` | `defaultStrategy` | The recommendation strategy to use. |
+| `limit` | `number` | `10` | Maximum number of recommendations to return. |
+| `similarityThreshold` | `number` | `defaultSimilarityThreshold` | Minimum similarity score required between entities. |
+| `minIntersectionSize` | `number` | `defaultMinIntersectionSize` | Minimum number of shared items/users required to compute similarity. |
+| `k` | `number` | `defaultK` | Limit the similarity calculation to the top K nearest neighbors. |
+| `excludeInteracted` | `boolean` | `true` | Whether to exclude items the user has already rated/interacted with. |
+| `fallbackStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `defaultFallbackStrategy` | Fallback strategy for cold start users. |
+| `excludeItemIds` | `string[]` | `undefined` | Optional array of item IDs to blacklist/exclude. |
+| `filter` | `(itemId: string) => boolean` | `undefined` | Optional custom callback to dynamically filter item recommendations. |
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 
@@ -315,6 +319,38 @@ Exports the entire internal state of the recommender engine (including sparse ma
 #### `import(state: RecommenderState): void`
 
 Restores the recommender engine state from a serialized state object. Automatically invalidates internal similarity caches. Throws a `ValidationError` if the version or structure is invalid.
+
+### Core Interfaces
+
+#### `interface Interaction`
+
+Represents a single user-item interaction event.
+
+| Property | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `userId` | `string` | Yes | Unique identifier of the user. |
+| `itemId` | `string` | Yes | Unique identifier of the item. |
+| `rating` | `number` | Yes | Numeric rating, weight, or score for the interaction. |
+| `type` | `string` | No | Type of interaction (e.g. `'view'`, `'rate'`, `'purchase'`). Used for weighting and fallback popularity strategy. |
+| `timestamp` | `number \| string \| Date` | No | Optional timestamp of when the interaction occurred. Used for exponential time-decay. |
+
+#### `interface Recommendation`
+
+Represents a single item recommendation result.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `itemId` | `string` | Unique identifier of the recommended item. |
+| `score` | `number` | Calculated recommendation score (higher scores represent better/stronger recommendations). |
+
+#### `interface RecommenderState`
+
+Represents the complete serialized state of the engine.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `version` | `string` | Serialization schema version (currently `"1"`). |
+| `matrix` | `SerializedMatrixState` | The serialized sparse matrix and item popularity indices. |
 
 ### Similarity Functions
 
