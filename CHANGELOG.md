@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-06-14
+
+### Added
+- **K-Nearest Neighbors (KNN) Limit**: Added option `k` to recommendation parameters and `defaultK` to `NanoRecommenderConfig` to limit similarity calculation/candidate selection to top K nearest neighbors, boosting both accuracy and performance.
+- **Similarity Intersection Threshold**: Added option `minIntersectionSize` to recommendation parameters and `defaultMinIntersectionSize` to `NanoRecommenderConfig` to filter out similarities computed from low-intersection pairs.
+
 ## [1.2.1] - 2026-06-13
 
 ### Changed

@@ -23,6 +23,8 @@ export interface ItemBasedRecommendationOptions {
   readonly filter?: (itemId: string) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
   readonly excludeItemIds?: string[];
+  /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
+  readonly k?: number | undefined;
 }
 
 
@@ -77,12 +79,15 @@ function scoreCandidate(
   similarityThreshold: number,
   simFn: SimilarityFunction,
   minIntersectionSize?: number,
+  k?: number,
   cache?: SimilarityCache
 ): number | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
   const candidateVector = transpose.get(candidateId);
   if (!candidateVector) return undefined;
+
+  const neighbors: { rating: number; sim: number }[] = [];
 
   for (const [itemId, rating] of userVector.entries()) {
     const itemVector = transpose.get(itemId);
@@ -93,9 +98,22 @@ function scoreCandidate(
       cache?.set(itemId, candidateId, sim);
     }
     if (sim >= similarityThreshold) {
-      weightedSum += rating * sim;
-      similaritySum += sim;
+      neighbors.push({ rating, sim });
     }
+  }
+
+  if (neighbors.length === 0) {
+    return undefined;
+  }
+
+  if (k !== undefined && k > 0 && neighbors.length > k) {
+    neighbors.sort((a, b) => b.sim - a.sim);
+    neighbors.length = k;
+  }
+
+  for (const neighbor of neighbors) {
+    weightedSum += neighbor.rating * neighbor.sim;
+    similaritySum += neighbor.sim;
   }
 
   return similaritySum > 0 ? weightedSum / similaritySum : undefined;
@@ -125,6 +143,7 @@ export function recommendForUser(
   const exclude = options.excludeInteracted ?? true;
   const simFn = options.similarityFunction ?? cosineSimilarity;
   const minIntersection = options.minIntersectionSize;
+  const k = options.k;
 
   const transpose = buildTransposeMatrix(matrix);
   const candidates = findCandidateItems(matrix, userVector, transpose, exclude);
@@ -142,7 +161,7 @@ export function recommendForUser(
   const recommendations: Recommendation[] = [];
 
   for (const candidateId of filteredCandidates) {
-    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, cache);
+    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, k, cache);
     if (score !== undefined) {
       recommendations.push({ itemId: candidateId, score });
     }

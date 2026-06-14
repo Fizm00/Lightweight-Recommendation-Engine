@@ -268,6 +268,7 @@ Instantiates the recommendation engine facade.
 - **`config.decayHalfLifeDays`**: `number`. Optional. Half-life in days for exponential time-decay weighting. Must be a positive number.
 - **`config.maxSimilarityCacheSize`**: `number`. Optional. Maximum number of entries in the similarity cache. Once exceeded, the least recently used entries are evicted (LRU eviction).
 - **`config.defaultMinIntersectionSize`**: `number`. Optional. The default minimum number of shared items/users required to compute similarity. Defaults to `1`.
+- **`config.defaultK`**: `number`. Optional. The default neighborhood limit (k) to use in recommendation calculations. Must be a positive integer.
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
@@ -289,6 +290,7 @@ Generates recommendation array for a user. Automatically delegates to the select
 - **`options.excludeItemIds`**: `string[]`. Optional. List of item IDs to blacklist/exclude from the recommendations.
 - **`options.filter`**: `(itemId: string) => boolean`. Optional. Custom callback to dynamically filter item recommendations (keep when `true`, exclude when `false`).
 - **`options.minIntersectionSize`**: `number`. Optional. The minimum number of shared items/users required to compute similarity. Defaults to constructor's `defaultMinIntersectionSize`.
+- **`options.k`**: `number`. Optional. Limit the similarity calculations or candidate selection to the top K nearest neighbors. Defaults to constructor's `defaultK`.
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 

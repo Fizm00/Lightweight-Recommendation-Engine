@@ -30,6 +30,8 @@ export interface NanoRecommenderConfig {
   readonly maxSimilarityCacheSize?: number;
   /** The default minimum intersection size required to compute similarity. Defaults to 1. */
   readonly defaultMinIntersectionSize?: number;
+  /** The default neighborhood limit (k) to use in recommendation calculations. Optional. */
+  readonly defaultK?: number;
 }
 
 /**
@@ -67,6 +69,7 @@ export class NanoRecommender {
   private readonly defaultStrategy: "item-based" | "user-based";
   private readonly defaultThreshold: number;
   private readonly defaultMinIntersectionSize: number;
+  private readonly defaultK: number | undefined;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
   private readonly interactionWeights?: Record<string, number>;
   private readonly decayHalfLifeDays?: number;
@@ -96,6 +99,19 @@ export class NanoRecommender {
       }
     }
     this.defaultMinIntersectionSize = config.defaultMinIntersectionSize ?? 1;
+
+    if (config.defaultK !== undefined) {
+      if (
+        typeof config.defaultK !== "number" ||
+        Number.isNaN(config.defaultK) ||
+        !Number.isFinite(config.defaultK) ||
+        !Number.isInteger(config.defaultK) ||
+        config.defaultK < 1
+      ) {
+        throw new ValidationError("defaultK must be a positive integer");
+      }
+      this.defaultK = config.defaultK;
+    }
 
     if (config.interactionWeights) {
       if (typeof config.interactionWeights !== "object" || config.interactionWeights === null) {
@@ -298,7 +314,8 @@ export class NanoRecommender {
     const strategy = options.strategy ?? this.defaultStrategy;
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
-    const combinedOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, ...options };
+    const k = options.k ?? this.defaultK;
+    const combinedOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options };
 
     if (strategy === "user-based") {
       return this.recommendUserBased(userId, combinedOptions);
@@ -339,6 +356,7 @@ export class NanoRecommender {
   ): Recommendation[] {
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
+    const k = options.k ?? this.defaultK;
     if (this.lastItemMinIntersectionSize !== undefined && this.lastItemMinIntersectionSize !== minIntersection) {
       this.itemCache.clear();
     }
@@ -346,7 +364,7 @@ export class NanoRecommender {
     return recommendForUser(
       this.matrix,
       userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, ...options },
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options },
       this.itemCache
     );
   }
@@ -364,6 +382,7 @@ export class NanoRecommender {
   ): Recommendation[] {
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
+    const k = options.k ?? this.defaultK;
     if (this.lastUserMinIntersectionSize !== undefined && this.lastUserMinIntersectionSize !== minIntersection) {
       this.userCache.clear();
     }
@@ -371,7 +390,7 @@ export class NanoRecommender {
     return recommendFromSimilarUsers(
       this.matrix,
       userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, ...options },
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options },
       this.userCache
     );
   }

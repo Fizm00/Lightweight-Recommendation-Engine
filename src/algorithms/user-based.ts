@@ -23,6 +23,8 @@ export interface UserBasedRecommendationOptions {
   readonly filter?: (itemId: string) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
   readonly excludeItemIds?: string[];
+  /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
+  readonly k?: number | undefined;
 }
 
 /**
@@ -199,7 +201,17 @@ export function recommendFromSimilarUsers(
     options.minIntersectionSize,
     cache
   );
-  const candidates = findCandidateItemsUB(userSimilarities, matrix, userVector, options.excludeInteracted ?? true);
+
+  let activeSimilarities = userSimilarities;
+  const k = options.k;
+  if (k !== undefined && k > 0 && userSimilarities.size > k) {
+    const sorted = Array.from(userSimilarities.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, k);
+    activeSimilarities = new Map(sorted);
+  }
+
+  const candidates = findCandidateItemsUB(activeSimilarities, matrix, userVector, options.excludeInteracted ?? true);
 
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
@@ -211,7 +223,7 @@ export function recommendFromSimilarUsers(
     filteredCandidates.add(candidateId);
   }
 
-  const recommendations = scoreCandidatesUB(filteredCandidates, transpose, userSimilarities);
+  const recommendations = scoreCandidatesUB(filteredCandidates, transpose, activeSimilarities);
 
   return sortAndLimit(recommendations, options.limit ?? 10);
 }
