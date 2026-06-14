@@ -267,6 +267,7 @@ Instantiates the recommendation engine facade.
 - **`config.interactionWeights`**: `Record<string, number>`. Optional. Mapping of interaction types (e.g., `"purchase"`, `"view"`) to positive rating multipliers.
 - **`config.decayHalfLifeDays`**: `number`. Optional. Half-life in days for exponential time-decay weighting. Must be a positive number.
 - **`config.maxSimilarityCacheSize`**: `number`. Optional. Maximum number of entries in the similarity cache. Once exceeded, the least recently used entries are evicted (LRU eviction).
+- **`config.defaultMinIntersectionSize`**: `number`. Optional. The default minimum number of shared items/users required to compute similarity. Defaults to `1`.
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
@@ -287,6 +288,7 @@ Generates recommendation array for a user. Automatically delegates to the select
 - **`options.fallbackStrategy`**: `"most-rated" | "most-viewed" | "most-purchased" | "none"`.
 - **`options.excludeItemIds`**: `string[]`. Optional. List of item IDs to blacklist/exclude from the recommendations.
 - **`options.filter`**: `(itemId: string) => boolean`. Optional. Custom callback to dynamically filter item recommendations (keep when `true`, exclude when `false`).
+- **`options.minIntersectionSize`**: `number`. Optional. The minimum number of shared items/users required to compute similarity. Defaults to constructor's `defaultMinIntersectionSize`.
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 

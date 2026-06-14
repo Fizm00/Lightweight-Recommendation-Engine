@@ -11,7 +11,7 @@ import type { SimilarityFunction } from "./similarity.js";
  * @param vectorB The second sparse vector.
  * @returns The Jaccard similarity coefficient score.
  */
-export const jaccardSimilarity: SimilarityFunction = (vectorA, vectorB) => {
+export const jaccardSimilarity: SimilarityFunction = (vectorA, vectorB, minIntersectionSize) => {
   const sizeA = vectorA.size;
   const sizeB = vectorB.size;
 
@@ -20,6 +20,10 @@ export const jaccardSimilarity: SimilarityFunction = (vectorA, vectorB) => {
   }
 
   const intersection = intersectionSize(vectorA, vectorB);
+  if (intersection < (minIntersectionSize ?? 1)) {
+    return 0;
+  }
+
   const union = sizeA + sizeB - intersection;
 
   return intersection / union;

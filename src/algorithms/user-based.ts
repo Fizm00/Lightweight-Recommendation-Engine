@@ -17,6 +17,8 @@ export interface UserBasedRecommendationOptions {
   readonly excludeInteracted?: boolean;
   /** The similarity function to use. Defaults to cosineSimilarity. */
   readonly similarityFunction?: SimilarityFunction;
+  /** Minimum number of shared items required to compute similarity. Defaults to 1. */
+  readonly minIntersectionSize?: number;
   /** Optional filter function to include/exclude item IDs. */
   readonly filter?: (itemId: string) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
@@ -68,6 +70,7 @@ function computeUserSimilarities(
   matrix: SparseMatrix,
   threshold: number,
   simFn: SimilarityFunction,
+  minIntersectionSize?: number,
   cache?: SimilarityCache
 ): Map<string, number> {
   const similarities = new Map<string, number>();
@@ -76,7 +79,7 @@ function computeUserSimilarities(
     if (!otherVector) continue;
     let sim = cache?.get(userId, otherUserId);
     if (sim === undefined) {
-      sim = simFn(userVector, otherVector);
+      sim = simFn(userVector, otherVector, minIntersectionSize);
       cache?.set(userId, otherUserId, sim);
     }
     if (sim >= threshold) {
@@ -193,6 +196,7 @@ export function recommendFromSimilarUsers(
     matrix,
     options.similarityThreshold ?? 0.0,
     options.similarityFunction ?? cosineSimilarity,
+    options.minIntersectionSize,
     cache
   );
   const candidates = findCandidateItemsUB(userSimilarities, matrix, userVector, options.excludeInteracted ?? true);

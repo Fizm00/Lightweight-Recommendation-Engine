@@ -17,6 +17,8 @@ export interface ItemBasedRecommendationOptions {
   readonly excludeInteracted?: boolean;
   /** The similarity function to use. Defaults to cosineSimilarity. */
   readonly similarityFunction?: SimilarityFunction;
+  /** Minimum number of shared items required to compute similarity. Defaults to 1. */
+  readonly minIntersectionSize?: number;
   /** Optional filter function to include/exclude item IDs. */
   readonly filter?: (itemId: string) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
@@ -74,6 +76,7 @@ function scoreCandidate(
   transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   similarityThreshold: number,
   simFn: SimilarityFunction,
+  minIntersectionSize?: number,
   cache?: SimilarityCache
 ): number | undefined {
   let weightedSum = 0;
@@ -86,7 +89,7 @@ function scoreCandidate(
     if (!itemVector) continue;
     let sim = cache?.get(itemId, candidateId);
     if (sim === undefined) {
-      sim = simFn(itemVector, candidateVector);
+      sim = simFn(itemVector, candidateVector, minIntersectionSize);
       cache?.set(itemId, candidateId, sim);
     }
     if (sim >= similarityThreshold) {
@@ -121,6 +124,7 @@ export function recommendForUser(
   const threshold = options.similarityThreshold ?? 0.0;
   const exclude = options.excludeInteracted ?? true;
   const simFn = options.similarityFunction ?? cosineSimilarity;
+  const minIntersection = options.minIntersectionSize;
 
   const transpose = buildTransposeMatrix(matrix);
   const candidates = findCandidateItems(matrix, userVector, transpose, exclude);
@@ -138,7 +142,7 @@ export function recommendForUser(
   const recommendations: Recommendation[] = [];
 
   for (const candidateId of filteredCandidates) {
-    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, cache);
+    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, cache);
     if (score !== undefined) {
       recommendations.push({ itemId: candidateId, score });
     }

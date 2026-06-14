@@ -1,3 +1,4 @@
+import { intersectionSize } from "./math.js";
 import type { SimilarityFunction } from "./similarity.js";
 
 /**
@@ -7,14 +8,20 @@ import type { SimilarityFunction } from "./similarity.js";
  * before calculating the cosine similarity.
  *
  * Returns 0.0 if either vector has a magnitude of 0.0 (e.g. all ratings are the same)
- * or if there are no items in common or if either vector is empty.
+ * or if there are no items in common or if either vector is empty or if the intersection size is below threshold.
  *
  * @param vectorA The first sparse vector.
  * @param vectorB The second sparse vector.
+ * @param minIntersectionSize The minimum number of shared items required to compute similarity.
  * @returns The Pearson Correlation coefficient.
  */
-export const pearsonCorrelation: SimilarityFunction = (vectorA, vectorB) => {
+export const pearsonCorrelation: SimilarityFunction = (vectorA, vectorB, minIntersectionSize) => {
   if (vectorA.size === 0 || vectorB.size === 0) {
+    return 0.0;
+  }
+
+  const shared = intersectionSize(vectorA, vectorB);
+  if (shared < (minIntersectionSize ?? 1)) {
     return 0.0;
   }
 
