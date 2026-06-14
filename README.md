@@ -62,15 +62,21 @@ It is designed for use-cases requiring rapid collaborative filtering and fallbac
 
 ## Features
 
-| Feature                                | Supported | Description                                                    |
-| :------------------------------------- | :-------: | :------------------------------------------------------------- |
-| **Item-Based Collaborative Filtering** |    Yes    | Recommends items based on item-item similarity matrices        |
-| **User-Based Collaborative Filtering** |    Yes    | Recommends items based on user-user similarity matrices        |
-| **Popularity Fallback Engine**         |    Yes    | Handles cold-start users using view, rate, and purchase counts |
-| **Seeded/Symmetric Similarity Cache**  |    Yes    | Optimizes calculations using symmetric pair caching            |
-| **Sparse Storage Engine**              |    Yes    | Operates entirely in memory with sparse indices                |
-| **Time-Decay Weighting**               |    Yes    | Automatically decays older interaction ratings exponentially   |
-| **TypeScript Ready**                   |    Yes    | Written in strict TypeScript with full declaration files       |
+| Feature                                     | Supported | Description                                                    |
+| :------------------------------------------ | :-------: | :------------------------------------------------------------- |
+| **Item-Based Collaborative Filtering**      |    Yes    | Recommends items based on item-item similarity matrices        |
+| **User-Based Collaborative Filtering**      |    Yes    | Recommends items based on user-user similarity matrices        |
+| **K-Nearest Neighbors (KNN) Limit**         |    Yes    | Limits calculations to top K nearest neighbors for performance |
+| **Similarity Intersection Threshold**       |    Yes    | Avoids statistical coincidences by enforcing minimum overlap   |
+| **Custom Similarity Metrics**               |    Yes    | Built-in Cosine, Jaccard, and Pearson correlation coefficients |
+| **Custom Filtering & Blacklisting**         |    Yes    | Filters recommendations dynamically via callback or blacklist  |
+| **Real-Time Incremental Updates**           |    Yes    | Live interaction updates with selective cache invalidation     |
+| **Popularity Fallback Engine**              |    Yes    | Handles cold-start users using view, rate, and purchase counts |
+| **Time-Decay Weighting**                    |    Yes    | Automatically decays older interaction ratings exponentially   |
+| **Dynamic Interaction Weighting**           |    Yes    | Scales rating scores based on interaction types at load time   |
+| **LRU Similarity Cache**                    |    Yes    | Prevents memory bloat with configurable LRU eviction limits   |
+| **Sparse Storage Engine**                   |    Yes    | Operates entirely in memory with sparse indices                |
+| **TypeScript Ready**                        |    Yes    | Written in strict TypeScript with full declaration files       |
 
 ---
 
@@ -226,6 +232,26 @@ const recs = recommender.recommend("user_id", {
     const isUserMinor = checkUserIsMinor("user_id");
     return !(isAdultOnly && isUserMinor);
   }
+});
+```
+
+### 6. Similarity Intersection Threshold
+
+To avoid statistical anomalies in sparse datasets (such as a similarity score of `1.0` between two entities sharing only a single rated item), you can enforce a minimum intersection threshold. Similarity computations will immediately exit and return `0.0` for any pairs sharing fewer than this number of common interactions:
+
+```typescript
+const recs = recommender.recommend("user_id", {
+  minIntersectionSize: 3, // Requires at least 3 shared ratings to compute similarity
+});
+```
+
+### 7. K-Nearest Neighbors (KNN) Limit
+
+To maximize prediction accuracy and reduce computational complexity under dense vectors, you can limit similarity scoring to the top K nearest neighbors (similar items in Item-Based CF, or similar users in User-Based CF):
+
+```typescript
+const recs = recommender.recommend("user_id", {
+  k: 20, // Only compute score using the top 20 nearest neighbors
 });
 ```
 
