@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation } from "../types/index.js";
+import type { Recommendation, RecommendationReason } from "../types/index.js";
 import type { SimilarityFunction } from "./similarity.js";
 import { cosineSimilarity } from "./cosine.js";
 import { buildTransposeMatrix, sortAndLimit } from "../utils/matrix-utils.js";
@@ -25,6 +25,12 @@ export interface ItemBasedRecommendationOptions {
   readonly excludeItemIds?: string[];
   /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
   readonly k?: number | undefined;
+  /** Whether to include explanation reasons for the recommendations. Optional. */
+  readonly explain?: boolean;
+  /** Optional category to filter item recommendations by. */
+  readonly filterCategory?: string;
+  /** Optional tags to filter item recommendations by (matches items having at least one of these tags). */
+  readonly filterTags?: string[];
 }
 
 
@@ -70,7 +76,8 @@ function findCandidateItems(
  * @param similarityThreshold The minimum similarity threshold.
  * @param simFn The similarity function to use.
  * @param cache Optional similarity cache.
- * @returns The predicted rating score, or undefined if no neighbors found.
+ * @param explain Whether to include explanation reasons.
+ * @returns The predicted rating score and optional reasons, or undefined if no neighbors found.
  */
 function scoreCandidate(
   userVector: ReadonlyMap<string, number>,
@@ -80,14 +87,15 @@ function scoreCandidate(
   simFn: SimilarityFunction,
   minIntersectionSize?: number,
   k?: number,
-  cache?: SimilarityCache
-): number | undefined {
+  cache?: SimilarityCache,
+  explain?: boolean
+): { score: number; reasons?: RecommendationReason[] } | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
   const candidateVector = transpose.get(candidateId);
   if (!candidateVector) return undefined;
 
-  const neighbors: { rating: number; sim: number }[] = [];
+  const neighbors: { itemId: string; rating: number; sim: number }[] = [];
 
   for (const [itemId, rating] of userVector.entries()) {
     const itemVector = transpose.get(itemId);
@@ -98,7 +106,7 @@ function scoreCandidate(
       cache?.set(itemId, candidateId, sim);
     }
     if (sim >= similarityThreshold) {
-      neighbors.push({ rating, sim });
+      neighbors.push({ itemId, rating, sim });
     }
   }
 
@@ -109,6 +117,8 @@ function scoreCandidate(
   if (k !== undefined && k > 0 && neighbors.length > k) {
     neighbors.sort((a, b) => b.sim - a.sim);
     neighbors.length = k;
+  } else if (explain) {
+    neighbors.sort((a, b) => b.sim - a.sim);
   }
 
   for (const neighbor of neighbors) {
@@ -116,7 +126,26 @@ function scoreCandidate(
     similaritySum += neighbor.sim;
   }
 
-  return similaritySum > 0 ? weightedSum / similaritySum : undefined;
+  if (similaritySum <= 0) {
+    return undefined;
+  }
+
+  const score = weightedSum / similaritySum;
+
+  let reasons: RecommendationReason[] | undefined;
+  if (explain) {
+    reasons = neighbors.map(n => ({
+      triggerItemId: n.itemId,
+      similarity: n.sim,
+      ratingGiven: n.rating,
+      explanation: `Because you liked item ${n.itemId}`,
+    }));
+  }
+
+  return {
+    score,
+    ...(reasons ? { reasons } : {}),
+  };
 }
 
 
@@ -155,15 +184,24 @@ export function recommendForUser(
   for (const candidateId of candidates) {
     if (excludeSet && excludeSet.has(candidateId)) continue;
     if (filterFn && !filterFn(candidateId)) continue;
+    if (options.filterCategory !== undefined && matrix.getItemCategory(candidateId) !== options.filterCategory) continue;
+    if (options.filterTags !== undefined && options.filterTags.length > 0) {
+      const itemTags = matrix.getItemTags(candidateId);
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+    }
     filteredCandidates.add(candidateId);
   }
 
   const recommendations: Recommendation[] = [];
 
   for (const candidateId of filteredCandidates) {
-    const score = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, k, cache);
-    if (score !== undefined) {
-      recommendations.push({ itemId: candidateId, score });
+    const result = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, k, cache, options.explain);
+    if (result !== undefined) {
+      recommendations.push({
+        itemId: candidateId,
+        score: result.score,
+        ...(result.reasons ? { reasons: result.reasons } : {}),
+      });
     }
   }
 

@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation } from "../types/index.js";
+import type { Recommendation, RecommendationReason } from "../types/index.js";
 import type { SimilarityFunction } from "./similarity.js";
 import { cosineSimilarity } from "./cosine.js";
 import { buildTransposeMatrix, sortAndLimit } from "../utils/matrix-utils.js";
@@ -25,6 +25,12 @@ export interface UserBasedRecommendationOptions {
   readonly excludeItemIds?: string[];
   /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
   readonly k?: number | undefined;
+  /** Whether to include explanation reasons for the recommendations. Optional. */
+  readonly explain?: boolean;
+  /** Optional category to filter item recommendations by. */
+  readonly filterCategory?: string;
+  /** Optional tags to filter item recommendations by (matches items having at least one of these tags). */
+  readonly filterTags?: string[];
 }
 
 /**
@@ -125,27 +131,55 @@ function findCandidateItemsUB(
  * @param candidateId The candidate item ID to predict score for.
  * @param transpose The transposed item-user matrix.
  * @param userSimilarities Map of user IDs to similarity scores.
- * @returns The predicted score, or undefined if similarity sum is zero.
+ * @param explain Whether to include explanation reasons.
+ * @returns The predicted score and optional reasons, or undefined if similarity sum is zero.
  */
 function scoreCandidateUB(
   candidateId: string,
   transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  userSimilarities: Map<string, number>
-): number | undefined {
+  userSimilarities: Map<string, number>,
+  explain?: boolean
+): { score: number; reasons?: RecommendationReason[] } | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
   const userMap = transpose.get(candidateId);
   if (!userMap) return undefined;
+
+  const contributors: { userId: string; rating: number; sim: number }[] = [];
 
   for (const [userId, rating] of userMap.entries()) {
     const sim = userSimilarities.get(userId);
     if (sim !== undefined) {
       weightedSum += rating * sim;
       similaritySum += sim;
+      if (explain) {
+        contributors.push({ userId, rating, sim });
+      }
     }
   }
 
-  return similaritySum > 0 ? weightedSum / similaritySum : undefined;
+  if (similaritySum <= 0) {
+    return undefined;
+  }
+
+  const score = weightedSum / similaritySum;
+
+  let reasons: RecommendationReason[] | undefined;
+  if (explain) {
+    reasons = contributors
+      .sort((a, b) => b.sim - a.sim)
+      .map(c => ({
+        triggerUserId: c.userId,
+        similarity: c.sim,
+        ratingGiven: c.rating,
+        explanation: `Because similar user ${c.userId} rated it ${c.rating}`,
+      }));
+  }
+
+  return {
+    score,
+    ...(reasons ? { reasons } : {}),
+  };
 }
 
 /**
@@ -154,18 +188,24 @@ function scoreCandidateUB(
  * @param candidates A Set of candidate item IDs.
  * @param transpose The transposed item-user matrix.
  * @param userSimilarities Map of user IDs to similarity scores.
+ * @param explain Whether to include explanation reasons.
  * @returns An array of recommendation objects.
  */
 function scoreCandidatesUB(
   candidates: Set<string>,
   transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  userSimilarities: Map<string, number>
+  userSimilarities: Map<string, number>,
+  explain?: boolean
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];
   for (const candidateId of candidates) {
-    const score = scoreCandidateUB(candidateId, transpose, userSimilarities);
-    if (score !== undefined) {
-      recommendations.push({ itemId: candidateId, score });
+    const result = scoreCandidateUB(candidateId, transpose, userSimilarities, explain);
+    if (result !== undefined) {
+      recommendations.push({
+        itemId: candidateId,
+        score: result.score,
+        ...(result.reasons ? { reasons: result.reasons } : {}),
+      });
     }
   }
   return recommendations;
@@ -220,10 +260,15 @@ export function recommendFromSimilarUsers(
   for (const candidateId of candidates) {
     if (excludeSet && excludeSet.has(candidateId)) continue;
     if (filterFn && !filterFn(candidateId)) continue;
+    if (options.filterCategory !== undefined && matrix.getItemCategory(candidateId) !== options.filterCategory) continue;
+    if (options.filterTags !== undefined && options.filterTags.length > 0) {
+      const itemTags = matrix.getItemTags(candidateId);
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+    }
     filteredCandidates.add(candidateId);
   }
 
-  const recommendations = scoreCandidatesUB(filteredCandidates, transpose, activeSimilarities);
+  const recommendations = scoreCandidatesUB(filteredCandidates, transpose, activeSimilarities, options.explain);
 
   return sortAndLimit(recommendations, options.limit ?? 10);
 }

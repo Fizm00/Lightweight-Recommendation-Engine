@@ -12,6 +12,26 @@ export interface Interaction {
   readonly type?: string;
   /** The timestamp when the interaction occurred (Date, string, or number in milliseconds). */
   readonly timestamp?: number | string | Date;
+  /** The optional category classification of the item. */
+  readonly itemCategory?: string;
+  /** The optional descriptive tags/keywords of the item. */
+  readonly itemTags?: string[];
+}
+
+/**
+ * Represents the reason behind a recommendation.
+ */
+export interface RecommendationReason {
+  /** The item ID that triggered this recommendation. */
+  readonly triggerItemId?: string;
+  /** The user ID that triggered this recommendation. */
+  readonly triggerUserId?: string;
+  /** The similarity score between the target and the trigger entity. */
+  readonly similarity: number;
+  /** The rating value given to/by the trigger entity. */
+  readonly ratingGiven?: number;
+  /** The explanation description in plain English text. */
+  readonly explanation: string;
 }
 
 /**
@@ -22,6 +42,8 @@ export interface Recommendation {
   readonly itemId: string;
   /** The recommendation score calculated by the engine. */
   readonly score: number;
+  /** Optional explanation details of why this recommendation was generated. */
+  readonly reasons?: RecommendationReason[];
 }
 
 /**
@@ -46,6 +68,10 @@ export interface SerializedMatrixState {
   readonly viewsCount: Record<string, number>;
   /** The item purchase frequencies mapped by item ID. */
   readonly purchasesCount: Record<string, number>;
+  /** The item categories mapped by item ID. */
+  readonly itemCategories?: Record<string, string>;
+  /** The item tags mapped by item ID. */
+  readonly itemTags?: Record<string, string[]>;
 }
 
 /**

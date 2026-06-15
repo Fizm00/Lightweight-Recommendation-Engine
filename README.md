@@ -36,6 +36,11 @@
   - [User-Based Collaborative Filtering](#2-user-based-collaborative-filtering)
   - [Popularity & Cold Start Fallbacks](#3-popularity--cold-start-fallbacks)
   - [Time-Decay Weighting](#4-time-decay-weighting)
+  - [Recommendation Filtering & Blacklisting](#5-recommendation-filtering--blacklisting)
+  - [Similarity Intersection Threshold](#6-similarity-intersection-threshold)
+  - [K-Nearest Neighbors (KNN) Limit](#7-k-nearest-neighbors-knn-limit)
+  - [Hybrid Recommendation Strategy](#8-hybrid-recommendation-strategy)
+  - [Explainable Recommendations](#9-explainable-recommendations)
 - [Performance](#performance)
 - [API Reference](#api-reference)
 - [Architecture](#architecture)
@@ -219,14 +224,38 @@ recommender.load(dataset, { referenceTime: new Date("2026-06-12T00:00:00Z") });
 
 ### 5. Recommendation Filtering & Blacklisting
 
-You can dynamically filter recommendations based on custom criteria (e.g. stock availability, age rating) or supply an explicit list of item IDs to exclude (blacklist):
+You can filter recommendations using built-in metadata, custom filter callbacks, or explicit blacklists:
+
+#### Built-in Category & Tag Filtering
+
+When loading your dataset, you can attach an optional `itemCategory` and list of `itemTags` to each interaction. The engine will store these attributes and allow you to filter recommendations directly without writing manual callbacks:
+
+```typescript
+// Load dataset with item metadata
+recommender.load([
+  { userId: "u1", itemId: "i1", rating: 5, itemCategory: "Book", itemTags: ["fantasy", "fiction"] },
+  { userId: "u1", itemId: "i2", rating: 4, itemCategory: "Movie", itemTags: ["sci-fi"] },
+]);
+
+// Filter recommendations for a specific category
+const bookRecs = recommender.recommend("user_id", {
+  filterCategory: "Book",
+});
+
+// Filter recommendations that match at least one tag (OR match)
+const tagRecs = recommender.recommend("user_id", {
+  filterTags: ["fantasy", "adventure"],
+});
+```
+
+#### Custom Callback & Blacklisting
+
+You can also supply a custom filter function or an explicit blacklist of item IDs:
 
 ```typescript
 const recs = recommender.recommend("user_id", {
   strategy: "item-based",
-  // Exclude explicit list of item IDs (blacklist)
   excludeItemIds: ["item_out_of_stock_1", "item_out_of_stock_2"],
-  // Custom filter callback (keep item if it returns true)
   filter: (itemId) => {
     const isAdultOnly = checkAdultCategory(itemId);
     const isUserMinor = checkUserIsMinor("user_id");
@@ -254,6 +283,55 @@ const recs = recommender.recommend("user_id", {
   k: 20, // Only compute score using the top 20 nearest neighbors
 });
 ```
+
+### 8. Hybrid Recommendation Strategy
+
+Combines personal collaborative filtering preferences with global popularity trends to deliver more dynamic and balanced recommendations. Both collaborative filtering scores and item popularity counts are normalized to the range `[0.0, 1.0]` using Min-Max scaling, then blended using the weighting parameter `hybridAlpha` ($\alpha$):
+
+$$\text{Final Score} = \alpha \cdot \text{Normalized CF Score} + (1 - \alpha) \cdot \text{Normalized Popularity Score}$$
+
+```typescript
+const recs = recommender.recommend("user_id", {
+  strategy: "hybrid",
+  hybridAlpha: 0.7, // 70% weight to CF, 30% to popularity
+  hybridBaseStrategy: "item-based",
+  hybridPopularityStrategy: "most-purchased",
+});
+```
+
+### 9. Explainable Recommendations
+
+To improve transparency and allow developers to display labels like *"Because you liked item X"* or *"Because similar user Y rated it Z"*, the engine can generate detailed explanation reasons when `explain: true` is passed:
+
+```typescript
+const recs = recommender.recommend("user_id", {
+  strategy: "item-based",
+  explain: true,
+});
+
+console.log(recs[0]);
+/*
+Output:
+{
+  itemId: "item_3",
+  score: 4.5,
+  reasons: [
+    {
+      triggerItemId: "item_1",
+      similarity: 0.95,
+      ratingGiven: 5.0,
+      explanation: "Because you liked item item_1"
+    }
+  ]
+}
+*/
+```
+
+Depending on the active strategy, the `reasons` field will contain:
+- **Item-Based CF**: Triggers showing which previously-rated items (`triggerItemId`, `similarity`, and target user's `ratingGiven`) influenced the candidate's score.
+- **User-Based CF**: Triggers showing which similar users (`triggerUserId`, `similarity` with target user, and their `ratingGiven` for the candidate) influenced the prediction.
+- **Popularity (Fallback/Cold-Start)**: Global descriptions like `"One of the most rated items"`.
+- **Hybrid**: Personalized collaborative filtering triggers mapped from the base CF strategy.
 
 ---
 
@@ -289,7 +367,7 @@ Instantiates the recommendation engine facade.
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `defaultStrategy` | `"item-based" \| "user-based"` | `"item-based"` | The default strategy to use in the `recommend()` method. |
+| `defaultStrategy` | `"item-based" \| "user-based" \| "hybrid"` | `"item-based"` | The default strategy to use in the `recommend()` method. |
 | `defaultSimilarityThreshold` | `number` | `0.0` | The default similarity threshold score between entities. |
 | `defaultMinIntersectionSize` | `number` | `1` | The default minimum number of shared items/users required to compute similarity. |
 | `defaultK` | `number` | `undefined` | The default neighborhood limit (K) to use in recommendation calculations. |
@@ -297,6 +375,8 @@ Instantiates the recommendation engine facade.
 | `interactionWeights` | `Record<string, number>` | `undefined` | Optional mapping of interaction types to positive rating multipliers. |
 | `decayHalfLifeDays` | `number` | `undefined` | Optional half-life in days for exponential time-decay weighting. |
 | `maxSimilarityCacheSize` | `number` | `undefined` | Optional capacity limit for similarity cache (LRU eviction). |
+| `defaultHybridAlpha` | `number` | `0.5` | The default weighting parameter alpha for hybrid strategy. Must be between 0.0 and 1.0. |
+| `defaultExplain` | `boolean` | `false` | The default explain option to include reasons in recommendation results. |
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
@@ -312,7 +392,7 @@ Generates recommendation array for a user. Automatically delegates to the select
 
 | Option | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `strategy` | `"item-based" \| "user-based"` | `defaultStrategy` | The recommendation strategy to use. |
+| `strategy` | `"item-based" \| "user-based" \| "hybrid"` | `defaultStrategy` | The recommendation strategy to use. |
 | `limit` | `number` | `10` | Maximum number of recommendations to return. |
 | `similarityThreshold` | `number` | `defaultSimilarityThreshold` | Minimum similarity score required between entities. |
 | `minIntersectionSize` | `number` | `defaultMinIntersectionSize` | Minimum number of shared items/users required to compute similarity. |
@@ -321,6 +401,12 @@ Generates recommendation array for a user. Automatically delegates to the select
 | `fallbackStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `defaultFallbackStrategy` | Fallback strategy for cold start users. |
 | `excludeItemIds` | `string[]` | `undefined` | Optional array of item IDs to blacklist/exclude. |
 | `filter` | `(itemId: string) => boolean` | `undefined` | Optional custom callback to dynamically filter item recommendations. |
+| `filterCategory` | `string` | `undefined` | Optional category classification to filter recommendations by. |
+| `filterTags` | `string[]` | `undefined` | Optional tags array to filter recommendations by (matches items with at least one tag). |
+| `hybridAlpha` | `number` | `defaultHybridAlpha` | Weighting parameter alpha for hybrid strategy (0.0 to 1.0). |
+| `hybridBaseStrategy` | `"item-based" \| "user-based"` | `defaultStrategy` (or `item-based`) | Collaborative filtering base strategy for hybrid. |
+| `hybridPopularityStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased"` | `defaultFallbackStrategy` (or `most-rated`) | Popularity strategy for hybrid. |
+| `explain` | `boolean` | `defaultExplain` | Whether to include explanation reasons for the recommendations. |
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 
@@ -329,6 +415,10 @@ Directly triggers Item-Based Collaborative Filtering. Accepts all filtering opti
 #### `recommendUserBased(userId: string, options?: UserBasedRecommendationOptions): Recommendation[]`
 
 Directly triggers User-Based Collaborative Filtering. Accepts all filtering options (`excludeItemIds`, `filter`).
+
+#### `recommendHybrid(userId: string, options?: RecommendationOptions): Recommendation[]`
+
+Directly triggers Hybrid Recommendation Strategy blending CF scores and popularity counts. Accepts all filtering options (`excludeItemIds`, `filter`).
 
 #### `clear(): void`
 
@@ -359,6 +449,8 @@ Represents a single user-item interaction event.
 | `rating` | `number` | Yes | Numeric rating, weight, or score for the interaction. |
 | `type` | `string` | No | Type of interaction (e.g. `'view'`, `'rate'`, `'purchase'`). Used for weighting and fallback popularity strategy. |
 | `timestamp` | `number \| string \| Date` | No | Optional timestamp of when the interaction occurred. Used for exponential time-decay. |
+| `itemCategory` | `string` | No | Optional category classification of the item. Used for built-in filtering. |
+| `itemTags` | `string[]` | No | Optional descriptive tags/keywords of the item. Used for built-in filtering. |
 
 #### `interface Recommendation`
 
@@ -368,6 +460,19 @@ Represents a single item recommendation result.
 | :--- | :--- | :--- |
 | `itemId` | `string` | Unique identifier of the recommended item. |
 | `score` | `number` | Calculated recommendation score (higher scores represent better/stronger recommendations). |
+| `reasons` | `RecommendationReason[]` | Optional explanation reasons detailing why this recommendation was generated. |
+
+#### `interface RecommendationReason`
+
+Represents the explanation reason behind a generated recommendation.
+
+| Property | Type | Description |
+| :--- | :--- | :--- |
+| `triggerItemId` | `string` | Optional item ID that triggered this recommendation (Item-Based CF). |
+| `triggerUserId` | `string` | Optional user ID that triggered this recommendation (User-Based CF). |
+| `similarity` | `number` | Similarity score between the target and the trigger entity. |
+| `ratingGiven` | `number` | Numeric rating value given to/by the trigger entity. |
+| `explanation` | `string` | Plain English description of the recommendation reason. |
 
 #### `interface RecommenderState`
 

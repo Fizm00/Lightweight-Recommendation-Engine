@@ -15,6 +15,8 @@ export class SparseMatrix {
   private readonly ratingsCount = new Map<string, number>();
   private readonly viewsCount = new Map<string, number>();
   private readonly purchasesCount = new Map<string, number>();
+  private readonly itemCategories = new Map<string, string>();
+  private readonly itemTags = new Map<string, string[]>();
 
   /**
    * Adds a single user-item interaction to the sparse matrix.
@@ -55,6 +57,13 @@ export class SparseMatrix {
     } else if (type === "purchase") {
       this.purchasesCount.set(itemId, (this.purchasesCount.get(itemId) ?? 0) + 1);
     }
+
+    if (interaction.itemCategory !== undefined) {
+      this.itemCategories.set(itemId, interaction.itemCategory);
+    }
+    if (interaction.itemTags !== undefined) {
+      this.itemTags.set(itemId, interaction.itemTags);
+    }
   }
 
   /**
@@ -84,6 +93,23 @@ export class SparseMatrix {
 
     if (type !== undefined && (typeof type !== "string" || type.trim() === "")) {
       throw new InvalidInteractionError("type must be a non-empty string if provided");
+    }
+
+    if (interaction.itemCategory !== undefined) {
+      if (typeof interaction.itemCategory !== "string" || interaction.itemCategory.trim() === "") {
+        throw new InvalidInteractionError("itemCategory must be a non-empty string if provided");
+      }
+    }
+
+    if (interaction.itemTags !== undefined) {
+      if (!Array.isArray(interaction.itemTags)) {
+        throw new InvalidInteractionError("itemTags must be an array of non-empty strings if provided");
+      }
+      for (const tag of interaction.itemTags) {
+        if (typeof tag !== "string" || tag.trim() === "") {
+          throw new InvalidInteractionError("Each tag in itemTags must be a non-empty string");
+        }
+      }
     }
   }
 
@@ -216,6 +242,28 @@ export class SparseMatrix {
     this.ratingsCount.clear();
     this.viewsCount.clear();
     this.purchasesCount.clear();
+    this.itemCategories.clear();
+    this.itemTags.clear();
+  }
+
+  /**
+   * Retrieves the category classification for an item.
+   *
+   * @param itemId The unique identifier of the item.
+   * @returns The item's category, or undefined if not set.
+   */
+  public getItemCategory(itemId: string): string | undefined {
+    return this.itemCategories.get(itemId);
+  }
+
+  /**
+   * Retrieves the descriptive tags for an item.
+   *
+   * @param itemId The unique identifier of the item.
+   * @returns The item's tags array, or undefined if not set.
+   */
+  public getItemTags(itemId: string): string[] | undefined {
+    return this.itemTags.get(itemId);
   }
 
   /**
@@ -293,11 +341,23 @@ export class SparseMatrix {
       purchasesCountRecord[itemId] = count;
     }
 
+    const itemCategoriesRecord: Record<string, string> = {};
+    for (const [itemId, category] of this.itemCategories.entries()) {
+      itemCategoriesRecord[itemId] = category;
+    }
+
+    const itemTagsRecord: Record<string, string[]> = {};
+    for (const [itemId, tags] of this.itemTags.entries()) {
+      itemTagsRecord[itemId] = tags;
+    }
+
     return {
       storage: storageRecord,
       ratingsCount: ratingsCountRecord,
       viewsCount: viewsCountRecord,
       purchasesCount: purchasesCountRecord,
+      itemCategories: itemCategoriesRecord,
+      itemTags: itemTagsRecord,
     };
   }
 
@@ -391,6 +451,43 @@ export class SparseMatrix {
           throw new ValidationError(`Invalid purchasesCount for item ${itemId}`);
         }
         this.purchasesCount.set(itemId, count);
+      }
+
+      // Restore itemCategories if present
+      if (state.itemCategories !== undefined) {
+        if (typeof state.itemCategories !== "object" || state.itemCategories === null) {
+          throw new ValidationError("Invalid itemCategories in serialized state");
+        }
+        for (const [itemId, category] of Object.entries(state.itemCategories)) {
+          if (typeof itemId !== "string" || itemId.trim() === "") {
+            throw new ValidationError("Invalid itemId in itemCategories");
+          }
+          if (typeof category !== "string" || category.trim() === "") {
+            throw new ValidationError(`Invalid category for item ${itemId}`);
+          }
+          this.itemCategories.set(itemId, category);
+        }
+      }
+
+      // Restore itemTags if present
+      if (state.itemTags !== undefined) {
+        if (typeof state.itemTags !== "object" || state.itemTags === null) {
+          throw new ValidationError("Invalid itemTags in serialized state");
+        }
+        for (const [itemId, tags] of Object.entries(state.itemTags)) {
+          if (typeof itemId !== "string" || itemId.trim() === "") {
+            throw new ValidationError("Invalid itemId in itemTags");
+          }
+          if (!Array.isArray(tags)) {
+            throw new ValidationError(`Invalid tags array for item ${itemId}`);
+          }
+          for (const tag of tags) {
+            if (typeof tag !== "string" || tag.trim() === "") {
+              throw new ValidationError(`Invalid tag in tags array for item ${itemId}`);
+            }
+          }
+          this.itemTags.set(itemId, tags);
+        }
       }
     } catch (error) {
       this.clear(); // Clean up partial state if error occurs

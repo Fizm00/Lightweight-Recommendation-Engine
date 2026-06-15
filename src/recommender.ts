@@ -11,13 +11,15 @@ import {
 import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popularity.js";
 import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
+import { sortAndLimit } from "./utils/matrix-utils.js";
+
 
 /**
  * Configuration options for the NanoRecommender engine.
  */
 export interface NanoRecommenderConfig {
   /** The default strategy to use in the recommend method. Defaults to 'item-based'. */
-  readonly defaultStrategy?: "item-based" | "user-based";
+  readonly defaultStrategy?: "item-based" | "user-based" | "hybrid";
   /** The default similarity threshold. Defaults to 0.0. */
   readonly defaultSimilarityThreshold?: number;
   /** The default fallback strategy for cold start users. Defaults to 'most-rated'. */
@@ -32,6 +34,10 @@ export interface NanoRecommenderConfig {
   readonly defaultMinIntersectionSize?: number;
   /** The default neighborhood limit (k) to use in recommendation calculations. Optional. */
   readonly defaultK?: number;
+  /** The default weighting parameter alpha for hybrid strategy. Must be between 0.0 and 1.0. Defaults to 0.5. */
+  readonly defaultHybridAlpha?: number;
+  /** The default explain option to include reasons in recommendation results. Optional. */
+  readonly defaultExplain?: boolean;
 }
 
 /**
@@ -50,10 +56,18 @@ export interface RecommenderStats {
  * Options for the recommendation method.
  */
 export interface RecommendationOptions extends ItemBasedRecommendationOptions, UserBasedRecommendationOptions {
-  /** The recommendation strategy to use: 'item-based' | 'user-based'. */
-  readonly strategy?: "item-based" | "user-based";
+  /** The recommendation strategy to use: 'item-based' | 'user-based' | 'hybrid'. */
+  readonly strategy?: "item-based" | "user-based" | "hybrid";
   /** Fallback strategy for cold start users. Defaults to constructor default fallback strategy. */
   readonly fallbackStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "none";
+  /** The weighting parameter alpha for hybrid strategy on this query. Optional. */
+  readonly hybridAlpha?: number | undefined;
+  /** The collaborative filtering base strategy to use for hybrid recommendation. Optional. */
+  readonly hybridBaseStrategy?: "item-based" | "user-based" | undefined;
+  /** The popularity strategy to use for hybrid recommendation. Optional. */
+  readonly hybridPopularityStrategy?: "most-rated" | "most-viewed" | "most-purchased" | undefined;
+  /** Whether to include explanation reasons for the recommendations. Optional. */
+  readonly explain?: boolean;
 }
 
 /**
@@ -66,10 +80,12 @@ export class NanoRecommender {
   private readonly matrix = new SparseMatrix();
   private readonly itemCache: SimilarityCache;
   private readonly userCache: SimilarityCache;
-  private readonly defaultStrategy: "item-based" | "user-based";
+  private readonly defaultStrategy: "item-based" | "user-based" | "hybrid";
   private readonly defaultThreshold: number;
   private readonly defaultMinIntersectionSize: number;
   private readonly defaultK: number | undefined;
+  private readonly defaultHybridAlpha: number;
+  private readonly defaultExplain: boolean;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
   private readonly interactionWeights?: Record<string, number>;
   private readonly decayHalfLifeDays?: number;
@@ -86,6 +102,11 @@ export class NanoRecommender {
     this.defaultStrategy = config.defaultStrategy ?? "item-based";
     this.defaultThreshold = config.defaultSimilarityThreshold ?? 0.0;
     this.defaultFallback = config.defaultFallbackStrategy ?? "most-rated";
+
+    if (config.defaultExplain !== undefined && typeof config.defaultExplain !== "boolean") {
+      throw new ValidationError("defaultExplain must be a boolean");
+    }
+    this.defaultExplain = config.defaultExplain ?? false;
 
     if (config.defaultMinIntersectionSize !== undefined) {
       if (
@@ -112,6 +133,19 @@ export class NanoRecommender {
       }
       this.defaultK = config.defaultK;
     }
+
+    if (config.defaultHybridAlpha !== undefined) {
+      if (
+        typeof config.defaultHybridAlpha !== "number" ||
+        Number.isNaN(config.defaultHybridAlpha) ||
+        !Number.isFinite(config.defaultHybridAlpha) ||
+        config.defaultHybridAlpha < 0.0 ||
+        config.defaultHybridAlpha > 1.0
+      ) {
+        throw new ValidationError("defaultHybridAlpha must be a number between 0.0 and 1.0");
+      }
+    }
+    this.defaultHybridAlpha = config.defaultHybridAlpha ?? 0.5;
 
     if (config.interactionWeights) {
       if (typeof config.interactionWeights !== "object" || config.interactionWeights === null) {
@@ -304,23 +338,115 @@ export class NanoRecommender {
    * @returns An array of ranked recommendation objects.
    */
   public recommend(userId: string, options: RecommendationOptions = {}): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
     const userVector = this.matrix.getUserVector(userId);
     const limit = options.limit ?? 10;
+    const explain = options.explain ?? this.defaultExplain;
+    const combinedOptions = { ...options, explain };
 
     if (!userVector || userVector.size === 0) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, options);
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, combinedOptions);
     }
 
     const strategy = options.strategy ?? this.defaultStrategy;
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
     const k = options.k ?? this.defaultK;
-    const combinedOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options };
+    const finalOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...combinedOptions };
 
-    if (strategy === "user-based") {
-      return this.recommendUserBased(userId, combinedOptions);
+    if (strategy === "hybrid") {
+      return this.recommendHybrid(userId, finalOptions);
     }
-    return this.recommendItemBased(userId, combinedOptions);
+    if (strategy === "user-based") {
+      return this.recommendUserBased(userId, finalOptions);
+    }
+    return this.recommendItemBased(userId, finalOptions);
+  }
+
+  /**
+   * Generates recommendations using a Hybrid Strategy combining CF and Popularity scores.
+   *
+   * @param userId The unique identifier of the target user.
+   * @param options Recommendation options containing hybrid strategy configs.
+   * @returns An array of ranked recommendation objects.
+   */
+  public recommendHybrid(
+    userId: string,
+    options: RecommendationOptions = {}
+  ): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
+    const limit = options.limit ?? 10;
+    const explain = options.explain ?? this.defaultExplain;
+
+    const alpha = options.hybridAlpha ?? this.defaultHybridAlpha;
+    if (typeof alpha !== "number" || Number.isNaN(alpha) || !Number.isFinite(alpha) || alpha < 0.0 || alpha > 1.0) {
+      throw new ValidationError("hybridAlpha must be a number between 0.0 and 1.0");
+    }
+
+    const baseStrategy = options.hybridBaseStrategy ??
+      (this.defaultStrategy === "hybrid" ? "item-based" : this.defaultStrategy);
+
+    // Get all collaborative filtering candidates (limit: Infinity)
+    const cfOptions = { ...options, limit: Infinity, explain };
+    const cfRecs = baseStrategy === "user-based"
+      ? this.recommendUserBased(userId, cfOptions)
+      : this.recommendItemBased(userId, cfOptions);
+
+    if (cfRecs.length === 0) {
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+    }
+
+    const popStrategy = options.hybridPopularityStrategy ??
+      (this.defaultFallback === "none" ? "most-rated" : this.defaultFallback as any);
+
+    let popMap: ReadonlyMap<string, number>;
+    if (popStrategy === "most-viewed") {
+      popMap = this.matrix.getViewsCountMap();
+    } else if (popStrategy === "most-purchased") {
+      popMap = this.matrix.getPurchasesCountMap();
+    } else {
+      popMap = this.matrix.getRatingsCountMap();
+    }
+
+    // Gather scores for Min-Max Normalization
+    let minCf = Infinity;
+    let maxCf = -Infinity;
+    let minPop = Infinity;
+    let maxPop = -Infinity;
+
+    const itemsData = cfRecs.map(rec => {
+      const cfScore = rec.score;
+      const popScore = popMap.get(rec.itemId) ?? 0;
+      const reasons = rec.reasons;
+
+      if (cfScore < minCf) minCf = cfScore;
+      if (cfScore > maxCf) maxCf = cfScore;
+      if (popScore < minPop) minPop = popScore;
+      if (popScore > maxPop) maxPop = popScore;
+
+      return { itemId: rec.itemId, cfScore, popScore, reasons };
+    });
+
+    // Compute blended hybrid scores
+    const hybridRecs: Recommendation[] = itemsData.map(item => {
+      const normCf = maxCf === minCf ? 1.0 : (item.cfScore - minCf) / (maxCf - minCf);
+      const normPop = maxPop === minPop ? 1.0 : (item.popScore - minPop) / (maxPop - minPop);
+
+      const blendedScore = alpha * normCf + (1.0 - alpha) * normPop;
+      return {
+        itemId: item.itemId,
+        score: blendedScore,
+        ...(explain ? { reasons: item.reasons } : {}),
+      };
+    });
+
+    return sortAndLimit(hybridRecs, limit);
   }
 
   /**
@@ -354,9 +480,14 @@ export class NanoRecommender {
     userId: string,
     options: ItemBasedRecommendationOptions = {}
   ): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
     const k = options.k ?? this.defaultK;
+    const explain = options.explain ?? this.defaultExplain;
     if (this.lastItemMinIntersectionSize !== undefined && this.lastItemMinIntersectionSize !== minIntersection) {
       this.itemCache.clear();
     }
@@ -364,7 +495,7 @@ export class NanoRecommender {
     return recommendForUser(
       this.matrix,
       userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options },
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...options },
       this.itemCache
     );
   }
@@ -380,9 +511,14 @@ export class NanoRecommender {
     userId: string,
     options: UserBasedRecommendationOptions = {}
   ): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
     const k = options.k ?? this.defaultK;
+    const explain = options.explain ?? this.defaultExplain;
     if (this.lastUserMinIntersectionSize !== undefined && this.lastUserMinIntersectionSize !== minIntersection) {
       this.userCache.clear();
     }
@@ -390,7 +526,7 @@ export class NanoRecommender {
     return recommendFromSimilarUsers(
       this.matrix,
       userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...options },
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...options },
       this.userCache
     );
   }
@@ -457,5 +593,23 @@ export class NanoRecommender {
     this.lastReferenceTimeMs = Date.now();
     this.lastItemMinIntersectionSize = undefined;
     this.lastUserMinIntersectionSize = undefined;
+  }
+
+  private validateFilteringOptions(options: { readonly filterCategory?: string; readonly filterTags?: string[] }): void {
+    if (options.filterCategory !== undefined) {
+      if (typeof options.filterCategory !== "string" || options.filterCategory.trim() === "") {
+        throw new ValidationError("filterCategory must be a non-empty string");
+      }
+    }
+    if (options.filterTags !== undefined) {
+      if (!Array.isArray(options.filterTags)) {
+        throw new ValidationError("filterTags must be an array of non-empty strings");
+      }
+      for (const tag of options.filterTags) {
+        if (typeof tag !== "string" || tag.trim() === "") {
+          throw new ValidationError("Each tag in filterTags must be a non-empty string");
+        }
+      }
+    }
   }
 }

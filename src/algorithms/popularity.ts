@@ -13,7 +13,13 @@ import { sortAndLimit } from "../utils/matrix-utils.js";
 export function getMostRated(
   matrix: SparseMatrix,
   limit: number,
-  options: { readonly filter?: (itemId: string) => boolean; readonly excludeItemIds?: string[] } = {}
+  options: {
+    readonly filter?: (itemId: string) => boolean;
+    readonly excludeItemIds?: string[];
+    readonly explain?: boolean;
+    readonly filterCategory?: string;
+    readonly filterTags?: string[];
+  } = {}
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
@@ -22,7 +28,16 @@ export function getMostRated(
   for (const [itemId, count] of matrix.getRatingsCountMap().entries()) {
     if (excludeSet && excludeSet.has(itemId)) continue;
     if (filterFn && !filterFn(itemId)) continue;
-    recommendations.push({ itemId, score: count });
+    if (options.filterCategory !== undefined && matrix.getItemCategory(itemId) !== options.filterCategory) continue;
+    if (options.filterTags !== undefined && options.filterTags.length > 0) {
+      const itemTags = matrix.getItemTags(itemId);
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+    }
+    recommendations.push({
+      itemId,
+      score: count,
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most rated items" }] } : {}),
+    });
   }
   return sortAndLimit(recommendations, limit);
 }
@@ -38,7 +53,13 @@ export function getMostRated(
 export function getMostViewed(
   matrix: SparseMatrix,
   limit: number,
-  options: { readonly filter?: (itemId: string) => boolean; readonly excludeItemIds?: string[] } = {}
+  options: {
+    readonly filter?: (itemId: string) => boolean;
+    readonly excludeItemIds?: string[];
+    readonly explain?: boolean;
+    readonly filterCategory?: string;
+    readonly filterTags?: string[];
+  } = {}
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
@@ -47,7 +68,16 @@ export function getMostViewed(
   for (const [itemId, count] of matrix.getViewsCountMap().entries()) {
     if (excludeSet && excludeSet.has(itemId)) continue;
     if (filterFn && !filterFn(itemId)) continue;
-    recommendations.push({ itemId, score: count });
+    if (options.filterCategory !== undefined && matrix.getItemCategory(itemId) !== options.filterCategory) continue;
+    if (options.filterTags !== undefined && options.filterTags.length > 0) {
+      const itemTags = matrix.getItemTags(itemId);
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+    }
+    recommendations.push({
+      itemId,
+      score: count,
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most viewed items" }] } : {}),
+    });
   }
   return sortAndLimit(recommendations, limit);
 }
@@ -63,7 +93,13 @@ export function getMostViewed(
 export function getMostPurchased(
   matrix: SparseMatrix,
   limit: number,
-  options: { readonly filter?: (itemId: string) => boolean; readonly excludeItemIds?: string[] } = {}
+  options: {
+    readonly filter?: (itemId: string) => boolean;
+    readonly excludeItemIds?: string[];
+    readonly explain?: boolean;
+    readonly filterCategory?: string;
+    readonly filterTags?: string[];
+  } = {}
 ): Recommendation[] {
   const recommendations: Recommendation[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
@@ -72,7 +108,16 @@ export function getMostPurchased(
   for (const [itemId, count] of matrix.getPurchasesCountMap().entries()) {
     if (excludeSet && excludeSet.has(itemId)) continue;
     if (filterFn && !filterFn(itemId)) continue;
-    recommendations.push({ itemId, score: count });
+    if (options.filterCategory !== undefined && matrix.getItemCategory(itemId) !== options.filterCategory) continue;
+    if (options.filterTags !== undefined && options.filterTags.length > 0) {
+      const itemTags = matrix.getItemTags(itemId);
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+    }
+    recommendations.push({
+      itemId,
+      score: count,
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most purchased items" }] } : {}),
+    });
   }
   return sortAndLimit(recommendations, limit);
 }

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-06-15
+
+### Added
+- **Built-in Tag/Category Filtering**: Extended interaction schema and matrix storage to support item categories (`itemCategory`) and tags (`itemTags`). Added query options `filterCategory` and `filterTags` to filter recommendation results automatically.
+
+## [1.5.0] - 2026-06-15
+
+### Added
+- **Explainable Recommendations**: Added `explain` option to recommendation queries and `defaultExplain` to recommender config to include a detailed `reasons` array explaining why items are recommended under all strategies.
+
+## [1.4.0] - 2026-06-15
+
+### Added
+- **Hybrid Recommendation Strategy**: Introduced `"hybrid"` strategy option to `recommend()` to blend Collaborative Filtering scores with global item popularity counts using min-max normalization and weight scaling ($\alpha$).
+
 ## [1.3.0] - 2026-06-14
 
 ### Added
