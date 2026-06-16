@@ -8,6 +8,8 @@ export * from "./algorithms/jaccard.js";
 export * from "./algorithms/pearson.js";
 export * from "./algorithms/item-based.js";
 export * from "./algorithms/user-based.js";
+export * from "./algorithms/content-based.js";
 export * from "./recommender.js";
+
 export * from "./algorithms/popularity.js";
 export * from "./core/cache.js";

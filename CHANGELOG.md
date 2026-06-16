@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-06-16
+
+### Added
+- **Content-Based Filtering (CBF)**: Introduced new `"content-based"` strategy option to `recommend()` that scores candidates using item-to-item similarity based on categories and tag Jaccard indices. Includes adjustable weights for category and tags.
+- **Content-Aware Hybrid Blending**: Enhanced `"hybrid"` strategy to support blending Collaborative Filtering (base) with Content-Based Filtering (secondary), enabling better recommendation variety and solving the cold-start problem.
+- **Explainable CBF reasons**: Added support for detailed reasons when `explain: true` is requested on content-based queries, detailing matching categories/tags.
+
 ## [1.6.0] - 2026-06-15
 
 ### Added

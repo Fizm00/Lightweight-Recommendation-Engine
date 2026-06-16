@@ -39,8 +39,10 @@
   - [Recommendation Filtering & Blacklisting](#5-recommendation-filtering--blacklisting)
   - [Similarity Intersection Threshold](#6-similarity-intersection-threshold)
   - [K-Nearest Neighbors (KNN) Limit](#7-k-nearest-neighbors-knn-limit)
-  - [Hybrid Recommendation Strategy](#8-hybrid-recommendation-strategy)
-  - [Explainable Recommendations](#9-explainable-recommendations)
+  - [Content-Based Filtering](#8-content-based-filtering)
+  - [Hybrid Recommendation Strategy](#9-hybrid-recommendation-strategy)
+  - [Explainable Recommendations](#10-explainable-recommendations)
+
 - [Performance](#performance)
 - [API Reference](#api-reference)
 - [Architecture](#architecture)
@@ -284,12 +286,25 @@ const recs = recommender.recommend("user_id", {
 });
 ```
 
-### 8. Hybrid Recommendation Strategy
+### 8. Content-Based Filtering
 
-Combines personal collaborative filtering preferences with global popularity trends to deliver more dynamic and balanced recommendations. Both collaborative filtering scores and item popularity counts are normalized to the range `[0.0, 1.0]` using Min-Max scaling, then blended using the weighting parameter `hybridAlpha` ($\alpha$):
+Recommends items similar to those the user has already interacted with based on item metadata (categories and tags). Item-to-item similarity is computed by blending exact category matches and Jaccard similarity of tags. Weights can be configured (e.g. `categoryWeight` and `tagWeight`).
 
-$$\text{Final Score} = \alpha \cdot \text{Normalized CF Score} + (1 - \alpha) \cdot \text{Normalized Popularity Score}$$
+```typescript
+const recs = recommender.recommend("user_id", {
+  strategy: "content-based",
+  categoryWeight: 0.4, // 40% weight to category similarity
+  tagWeight: 0.6,      // 60% weight to tag Jaccard similarity
+});
+```
 
+### 9. Hybrid Recommendation Strategy
+
+Combines personal collaborative filtering preferences with global popularity trends or content-based matching to deliver more dynamic and balanced recommendations. Both components are normalized to the range `[0.0, 1.0]` using Min-Max scaling, then blended using the weighting parameter `hybridAlpha` ($\alpha$):
+
+$$\text{Final Score} = \alpha \cdot \text{Normalized Base Score} + (1 - \alpha) \cdot \text{Normalized Secondary Score}$$
+
+#### Collaborative Filtering + Popularity Blending
 ```typescript
 const recs = recommender.recommend("user_id", {
   strategy: "hybrid",
@@ -299,7 +314,17 @@ const recs = recommender.recommend("user_id", {
 });
 ```
 
-### 9. Explainable Recommendations
+#### Collaborative Filtering + Content-Based Blending (Content-Aware Hybrid)
+```typescript
+const recs = recommender.recommend("user_id", {
+  strategy: "hybrid",
+  hybridAlpha: 0.5, // 50% weight to CF, 50% to Content-Based
+  hybridBaseStrategy: "item-based",
+  hybridPopularityStrategy: "content-based", // uses content-based as the secondary strategy
+});
+```
+
+### 10. Explainable Recommendations
 
 To improve transparency and allow developers to display labels like *"Because you liked item X"* or *"Because similar user Y rated it Z"*, the engine can generate detailed explanation reasons when `explain: true` is passed:
 
@@ -330,8 +355,9 @@ Output:
 Depending on the active strategy, the `reasons` field will contain:
 - **Item-Based CF**: Triggers showing which previously-rated items (`triggerItemId`, `similarity`, and target user's `ratingGiven`) influenced the candidate's score.
 - **User-Based CF**: Triggers showing which similar users (`triggerUserId`, `similarity` with target user, and their `ratingGiven` for the candidate) influenced the prediction.
+- **Content-Based Filtering**: Triggers showing which items with similar content (`triggerItemId` and `similarity` match) influenced the prediction.
 - **Popularity (Fallback/Cold-Start)**: Global descriptions like `"One of the most rated items"`.
-- **Hybrid**: Personalized collaborative filtering triggers mapped from the base CF strategy.
+- **Hybrid**: Combined reasons merged from the base and secondary strategies.
 
 ---
 

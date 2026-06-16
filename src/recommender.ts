@@ -1,5 +1,5 @@
 import { SparseMatrix } from "./core/matrix.js";
-import type { Interaction, Recommendation, RecommenderState } from "./types/index.js";
+import type { Interaction, Recommendation, RecommendationReason, RecommenderState } from "./types/index.js";
 import {
   type ItemBasedRecommendationOptions,
   recommendForUser,
@@ -8,6 +8,10 @@ import {
   type UserBasedRecommendationOptions,
   recommendFromSimilarUsers,
 } from "./algorithms/user-based.js";
+import {
+  type ContentBasedRecommendationOptions,
+  recommendContentBased,
+} from "./algorithms/content-based.js";
 import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popularity.js";
 import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
@@ -19,7 +23,7 @@ import { sortAndLimit } from "./utils/matrix-utils.js";
  */
 export interface NanoRecommenderConfig {
   /** The default strategy to use in the recommend method. Defaults to 'item-based'. */
-  readonly defaultStrategy?: "item-based" | "user-based" | "hybrid";
+  readonly defaultStrategy?: "item-based" | "user-based" | "hybrid" | "content-based";
   /** The default similarity threshold. Defaults to 0.0. */
   readonly defaultSimilarityThreshold?: number;
   /** The default fallback strategy for cold start users. Defaults to 'most-rated'. */
@@ -38,6 +42,10 @@ export interface NanoRecommenderConfig {
   readonly defaultHybridAlpha?: number;
   /** The default explain option to include reasons in recommendation results. Optional. */
   readonly defaultExplain?: boolean;
+  /** The default category weight for content-based similarity. Optional. Defaults to 0.5. */
+  readonly defaultContentCategoryWeight?: number;
+  /** The default tag weight for content-based similarity. Optional. Defaults to 0.5. */
+  readonly defaultContentTagWeight?: number;
 }
 
 /**
@@ -55,17 +63,17 @@ export interface RecommenderStats {
 /**
  * Options for the recommendation method.
  */
-export interface RecommendationOptions extends ItemBasedRecommendationOptions, UserBasedRecommendationOptions {
-  /** The recommendation strategy to use: 'item-based' | 'user-based' | 'hybrid'. */
-  readonly strategy?: "item-based" | "user-based" | "hybrid";
+export interface RecommendationOptions extends ItemBasedRecommendationOptions, UserBasedRecommendationOptions, ContentBasedRecommendationOptions {
+  /** The recommendation strategy to use: 'item-based' | 'user-based' | 'hybrid' | 'content-based'. */
+  readonly strategy?: "item-based" | "user-based" | "hybrid" | "content-based";
   /** Fallback strategy for cold start users. Defaults to constructor default fallback strategy. */
   readonly fallbackStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "none";
   /** The weighting parameter alpha for hybrid strategy on this query. Optional. */
   readonly hybridAlpha?: number | undefined;
   /** The collaborative filtering base strategy to use for hybrid recommendation. Optional. */
-  readonly hybridBaseStrategy?: "item-based" | "user-based" | undefined;
+  readonly hybridBaseStrategy?: "item-based" | "user-based" | "content-based" | undefined;
   /** The popularity strategy to use for hybrid recommendation. Optional. */
-  readonly hybridPopularityStrategy?: "most-rated" | "most-viewed" | "most-purchased" | undefined;
+  readonly hybridPopularityStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "content-based" | undefined;
   /** Whether to include explanation reasons for the recommendations. Optional. */
   readonly explain?: boolean;
 }
@@ -80,18 +88,22 @@ export class NanoRecommender {
   private readonly matrix = new SparseMatrix();
   private readonly itemCache: SimilarityCache;
   private readonly userCache: SimilarityCache;
-  private readonly defaultStrategy: "item-based" | "user-based" | "hybrid";
+  private readonly contentCache: SimilarityCache;
+  private readonly defaultStrategy: "item-based" | "user-based" | "hybrid" | "content-based";
   private readonly defaultThreshold: number;
   private readonly defaultMinIntersectionSize: number;
   private readonly defaultK: number | undefined;
   private readonly defaultHybridAlpha: number;
   private readonly defaultExplain: boolean;
+  private readonly defaultContentCategoryWeight: number;
+  private readonly defaultContentTagWeight: number;
   private readonly defaultFallback: "most-rated" | "most-viewed" | "most-purchased" | "none";
   private readonly interactionWeights?: Record<string, number>;
   private readonly decayHalfLifeDays?: number;
   private lastReferenceTimeMs = Date.now();
   private lastItemMinIntersectionSize: number | undefined;
   private lastUserMinIntersectionSize: number | undefined;
+
 
   /**
    * Constructs a new NanoRecommender instance.
@@ -171,6 +183,33 @@ export class NanoRecommender {
       this.decayHalfLifeDays = config.decayHalfLifeDays;
     }
 
+    let catW = config.defaultContentCategoryWeight;
+    let tagW = config.defaultContentTagWeight;
+    if (catW !== undefined) {
+      if (typeof catW !== "number" || Number.isNaN(catW) || catW < 0.0 || catW > 1.0) {
+        throw new ValidationError("defaultContentCategoryWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (tagW !== undefined) {
+      if (typeof tagW !== "number" || Number.isNaN(tagW) || tagW < 0.0 || tagW > 1.0) {
+        throw new ValidationError("defaultContentTagWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (catW !== undefined && tagW !== undefined) {
+      if (Math.abs(catW + tagW - 1.0) > 1e-9) {
+        throw new ValidationError("defaultContentCategoryWeight and defaultContentTagWeight must sum to 1.0");
+      }
+    } else if (catW !== undefined) {
+      tagW = 1.0 - catW;
+    } else if (tagW !== undefined) {
+      catW = 1.0 - tagW;
+    } else {
+      catW = 0.5;
+      tagW = 0.5;
+    }
+    this.defaultContentCategoryWeight = catW;
+    this.defaultContentTagWeight = tagW;
+
     let maxCacheSize: number | undefined;
     if (config.maxSimilarityCacheSize !== undefined) {
       if (
@@ -187,6 +226,8 @@ export class NanoRecommender {
 
     this.itemCache = new SimilarityCache(maxCacheSize);
     this.userCache = new SimilarityCache(maxCacheSize);
+    this.contentCache = new SimilarityCache(maxCacheSize);
+
   }
 
   /**
@@ -269,6 +310,7 @@ export class NanoRecommender {
     this.matrix.addInteractions(processedInteractions);
     this.itemCache.clear();
     this.userCache.clear();
+    this.contentCache.clear();
     this.lastItemMinIntersectionSize = undefined;
     this.lastUserMinIntersectionSize = undefined;
   }
@@ -328,6 +370,7 @@ export class NanoRecommender {
     // 4. Invalidate specific cache entries
     this.itemCache.invalidate(itemId);
     this.userCache.invalidate(userId);
+    this.contentCache.invalidate(itemId);
   }
 
   /**
@@ -363,8 +406,12 @@ export class NanoRecommender {
     if (strategy === "user-based") {
       return this.recommendUserBased(userId, finalOptions);
     }
+    if (strategy === "content-based") {
+      return this.recommendContentBased(userId, finalOptions);
+    }
     return this.recommendItemBased(userId, finalOptions);
   }
+
 
   /**
    * Generates recommendations using a Hybrid Strategy combining CF and Popularity scores.
@@ -392,61 +439,154 @@ export class NanoRecommender {
     const baseStrategy = options.hybridBaseStrategy ??
       (this.defaultStrategy === "hybrid" ? "item-based" : this.defaultStrategy);
 
-    // Get all collaborative filtering candidates (limit: Infinity)
-    const cfOptions = { ...options, limit: Infinity, explain };
-    const cfRecs = baseStrategy === "user-based"
-      ? this.recommendUserBased(userId, cfOptions)
-      : this.recommendItemBased(userId, cfOptions);
-
-    if (cfRecs.length === 0) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
-    }
-
     const popStrategy = options.hybridPopularityStrategy ??
       (this.defaultFallback === "none" ? "most-rated" : this.defaultFallback as any);
 
-    let popMap: ReadonlyMap<string, number>;
-    if (popStrategy === "most-viewed") {
-      popMap = this.matrix.getViewsCountMap();
-    } else if (popStrategy === "most-purchased") {
-      popMap = this.matrix.getPurchasesCountMap();
+    if (popStrategy === "content-based") {
+      // 1. Get base strategy recommendations
+      const baseRecs = baseStrategy === "user-based"
+        ? this.recommendUserBased(userId, { ...options, limit: Infinity, explain })
+        : baseStrategy === "content-based"
+        ? this.recommendContentBased(userId, { ...options, limit: Infinity, explain })
+        : this.recommendItemBased(userId, { ...options, limit: Infinity, explain });
+
+      // 2. Get secondary content-based recommendations
+      const cbRecs = this.recommendContentBased(userId, { ...options, limit: Infinity, explain });
+
+      // Handle cold start if both lists are empty
+      if (baseRecs.length === 0 && cbRecs.length === 0) {
+        return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+      }
+
+      // Map item IDs to their recommendation objects for fast lookup
+      const baseMap = new Map<string, Recommendation>();
+      let minBase = Infinity;
+      let maxBase = -Infinity;
+      for (const rec of baseRecs) {
+        baseMap.set(rec.itemId, rec);
+        if (rec.score < minBase) minBase = rec.score;
+        if (rec.score > maxBase) maxBase = rec.score;
+      }
+      if (baseRecs.length === 0) {
+        minBase = 0.0;
+        maxBase = 0.0;
+      }
+
+      const cbMap = new Map<string, Recommendation>();
+      let minCb = Infinity;
+      let maxCb = -Infinity;
+      for (const rec of cbRecs) {
+        cbMap.set(rec.itemId, rec);
+        if (rec.score < minCb) minCb = rec.score;
+        if (rec.score > maxCb) maxCb = rec.score;
+      }
+      if (cbRecs.length === 0) {
+        minCb = 0.0;
+        maxCb = 0.0;
+      }
+
+      // Gather all unique item IDs
+      const allItemIds = new Set<string>([...baseMap.keys(), ...cbMap.keys()]);
+      const hybridRecs: Recommendation[] = [];
+
+      for (const itemId of allItemIds) {
+        const baseRec = baseMap.get(itemId);
+        const cbRec = cbMap.get(itemId);
+
+        const baseScore = baseRec ? baseRec.score : 0.0;
+        const cbScore = cbRec ? cbRec.score : 0.0;
+
+        let normBase = 0.0;
+        if (baseRec) {
+          normBase = maxBase === minBase ? 1.0 : (baseScore - minBase) / (maxBase - minBase);
+        }
+
+        let normCb = 0.0;
+        if (cbRec) {
+          normCb = maxCb === minCb ? 1.0 : (cbScore - minCb) / (maxCb - minCb);
+        }
+
+        const blendedScore = alpha * normBase + (1.0 - alpha) * normCb;
+        if (blendedScore <= 0.0) {
+          continue;
+        }
+
+        let reasons: RecommendationReason[] | undefined;
+        if (explain) {
+          const baseReasons = baseRec?.reasons ?? [];
+          const cbReasons = cbRec?.reasons ?? [];
+          
+          const combinedReasons = [...baseReasons, ...cbReasons];
+          if (combinedReasons.length > 0) {
+            combinedReasons.sort((a, b) => b.similarity - a.similarity);
+            reasons = combinedReasons;
+          }
+        }
+
+        hybridRecs.push({
+          itemId,
+          score: blendedScore,
+          ...(reasons ? { reasons } : {}),
+        });
+      }
+
+      return sortAndLimit(hybridRecs, limit);
     } else {
-      popMap = this.matrix.getRatingsCountMap();
+      // Get all collaborative/base filtering candidates (limit: Infinity)
+      const cfOptions = { ...options, limit: Infinity, explain };
+      const cfRecs = baseStrategy === "user-based"
+        ? this.recommendUserBased(userId, cfOptions)
+        : baseStrategy === "content-based"
+        ? this.recommendContentBased(userId, cfOptions)
+        : this.recommendItemBased(userId, cfOptions);
+
+      if (cfRecs.length === 0) {
+        return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+      }
+
+      let popMap: ReadonlyMap<string, number>;
+      if (popStrategy === "most-viewed") {
+        popMap = this.matrix.getViewsCountMap();
+      } else if (popStrategy === "most-purchased") {
+        popMap = this.matrix.getPurchasesCountMap();
+      } else {
+        popMap = this.matrix.getRatingsCountMap();
+      }
+
+      // Gather scores for Min-Max Normalization
+      let minCf = Infinity;
+      let maxCf = -Infinity;
+      let minPop = Infinity;
+      let maxPop = -Infinity;
+
+      const itemsData = cfRecs.map(rec => {
+        const cfScore = rec.score;
+        const popScore = popMap.get(rec.itemId) ?? 0;
+        const reasons = rec.reasons;
+
+        if (cfScore < minCf) minCf = cfScore;
+        if (cfScore > maxCf) maxCf = cfScore;
+        if (popScore < minPop) minPop = popScore;
+        if (popScore > maxPop) maxPop = popScore;
+
+        return { itemId: rec.itemId, cfScore, popScore, reasons };
+      });
+
+      // Compute blended hybrid scores
+      const hybridRecs: Recommendation[] = itemsData.map(item => {
+        const normCf = maxCf === minCf ? 1.0 : (item.cfScore - minCf) / (maxCf - minCf);
+        const normPop = maxPop === minPop ? 1.0 : (item.popScore - minPop) / (maxPop - minPop);
+
+        const blendedScore = alpha * normCf + (1.0 - alpha) * normPop;
+        return {
+          itemId: item.itemId,
+          score: blendedScore,
+          ...(item.reasons ? { reasons: item.reasons } : {}),
+        };
+      });
+
+      return sortAndLimit(hybridRecs, limit);
     }
-
-    // Gather scores for Min-Max Normalization
-    let minCf = Infinity;
-    let maxCf = -Infinity;
-    let minPop = Infinity;
-    let maxPop = -Infinity;
-
-    const itemsData = cfRecs.map(rec => {
-      const cfScore = rec.score;
-      const popScore = popMap.get(rec.itemId) ?? 0;
-      const reasons = rec.reasons;
-
-      if (cfScore < minCf) minCf = cfScore;
-      if (cfScore > maxCf) maxCf = cfScore;
-      if (popScore < minPop) minPop = popScore;
-      if (popScore > maxPop) maxPop = popScore;
-
-      return { itemId: rec.itemId, cfScore, popScore, reasons };
-    });
-
-    // Compute blended hybrid scores
-    const hybridRecs: Recommendation[] = itemsData.map(item => {
-      const normCf = maxCf === minCf ? 1.0 : (item.cfScore - minCf) / (maxCf - minCf);
-      const normPop = maxPop === minPop ? 1.0 : (item.popScore - minPop) / (maxPop - minPop);
-
-      const blendedScore = alpha * normCf + (1.0 - alpha) * normPop;
-      return {
-        itemId: item.itemId,
-        score: blendedScore,
-        ...(explain ? { reasons: item.reasons } : {}),
-      };
-    });
-
-    return sortAndLimit(hybridRecs, limit);
   }
 
   /**
@@ -532,12 +672,73 @@ export class NanoRecommender {
   }
 
   /**
+   * Generates recommendations using Content-Based Filtering.
+   *
+   * @param userId The unique identifier of the target user.
+   * @param options Content-based recommendation options.
+   * @returns An array of ranked recommendation objects.
+   */
+  public recommendContentBased(
+    userId: string,
+    options: ContentBasedRecommendationOptions = {}
+  ): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
+
+    let catW = options.categoryWeight;
+    let tagW = options.tagWeight;
+    if (catW !== undefined) {
+      if (typeof catW !== "number" || Number.isNaN(catW) || catW < 0.0 || catW > 1.0) {
+        throw new ValidationError("categoryWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (tagW !== undefined) {
+      if (typeof tagW !== "number" || Number.isNaN(tagW) || tagW < 0.0 || tagW > 1.0) {
+        throw new ValidationError("tagWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (catW !== undefined && tagW !== undefined) {
+      if (Math.abs(catW + tagW - 1.0) > 1e-9) {
+        throw new ValidationError("categoryWeight and tagWeight must sum to 1.0");
+      }
+    } else if (catW !== undefined) {
+      tagW = 1.0 - catW;
+    } else if (tagW !== undefined) {
+      catW = 1.0 - tagW;
+    } else {
+      catW = this.defaultContentCategoryWeight;
+      tagW = this.defaultContentTagWeight;
+    }
+
+    const threshold = options.similarityThreshold ?? this.defaultThreshold;
+    const k = options.k ?? this.defaultK;
+    const explain = options.explain ?? this.defaultExplain;
+
+    return recommendContentBased(
+      this.matrix,
+      userId,
+      {
+        similarityThreshold: threshold,
+        k,
+        explain,
+        categoryWeight: catW,
+        tagWeight: tagW,
+        ...options,
+      },
+      this.contentCache
+    );
+  }
+
+  /**
    * Clears all interactions and internal datasets from the engine.
    */
   public clear(): void {
     this.matrix.clear();
     this.itemCache.clear();
     this.userCache.clear();
+    this.contentCache.clear();
     this.lastItemMinIntersectionSize = undefined;
     this.lastUserMinIntersectionSize = undefined;
   }
@@ -590,6 +791,7 @@ export class NanoRecommender {
     this.matrix.importState(state.matrix);
     this.itemCache.clear();
     this.userCache.clear();
+    this.contentCache.clear();
     this.lastReferenceTimeMs = Date.now();
     this.lastItemMinIntersectionSize = undefined;
     this.lastUserMinIntersectionSize = undefined;
