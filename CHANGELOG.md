@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-06-17
+
+### Added
+- **Offline Evaluation Suite**: Introduced a new `evaluation` module containing dataset splitters (`splitRandom`, `splitTemporal`, `splitUserHoldout`), core accuracy metrics (`calculatePrecision`, `calculateRecall`, `calculateNDCG`, `calculateRMSE`, `calculateMAE`), and an evaluation runner (`evaluate`) that automatically trains and tests a recommender while saving and restoring its original state.
+
 ## [1.7.0] - 2026-06-16
 
 ### Added

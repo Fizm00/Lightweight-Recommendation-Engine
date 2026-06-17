@@ -13,3 +13,5 @@ export * from "./recommender.js";
 
 export * from "./algorithms/popularity.js";
 export * from "./core/cache.js";
+export * from "./evaluation/index.js";
+

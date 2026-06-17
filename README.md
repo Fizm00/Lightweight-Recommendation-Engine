@@ -42,7 +42,7 @@
   - [Content-Based Filtering](#8-content-based-filtering)
   - [Hybrid Recommendation Strategy](#9-hybrid-recommendation-strategy)
   - [Explainable Recommendations](#10-explainable-recommendations)
-
+- [Offline Evaluation Suite](#offline-evaluation-suite)
 - [Performance](#performance)
 - [API Reference](#api-reference)
 - [Architecture](#architecture)
@@ -358,6 +358,55 @@ Depending on the active strategy, the `reasons` field will contain:
 - **Content-Based Filtering**: Triggers showing which items with similar content (`triggerItemId` and `similarity` match) influenced the prediction.
 - **Popularity (Fallback/Cold-Start)**: Global descriptions like `"One of the most rated items"`.
 - **Hybrid**: Combined reasons merged from the base and secondary strategies.
+
+## Offline Evaluation Suite
+
+The library includes a built-in evaluation suite under the `evaluation` namespace, enabling developers to partition interaction datasets and calculate recommendation quality metrics.
+
+### Splitting Strategies
+
+You can split your interaction arrays into training and testing sets using one of three splitter functions:
+
+*   **`splitRandom(interactions, trainRatio)`**: Randomly splits interactions.
+*   **`splitTemporal(interactions, trainRatio)`**: Splits interactions chronologically based on timestamps.
+*   **`splitUserHoldout(interactions, trainRatio)`**: Groups interactions by user, shuffling and holding out a percentage of interactions for each user. This guarantees that test users have history in the training set.
+
+```typescript
+import { splitUserHoldout } from "@fizm/nano-recommender";
+
+const { train, test } = splitUserHoldout(dataset, 0.8); // 80% train, 20% test
+```
+
+### Running Evaluations
+
+The `evaluate` function automates training a recommender and testing its accuracy, returning standard ranking and rating prediction metrics. It automatically handles exporting, clearing, and fully restoring the original state of the recommender instance once evaluation completes.
+
+```typescript
+import { NanoRecommender, evaluate } from "@fizm/nano-recommender";
+
+const recommender = new NanoRecommender();
+
+const results = evaluate(recommender, train, test, {
+  topK: 10, // K for Precision@K, Recall@K, and NDCG@K
+  strategyOptions: {
+    strategy: "item-based",
+    similarityThreshold: 0.1,
+  }
+});
+
+console.log(results);
+/*
+Output:
+{
+  rmse: 0.854,     // Root Mean Squared Error (rating prediction quality)
+  mae: 0.652,      // Mean Absolute Error
+  precision: 0.15, // Mean Precision@10 across test users
+  recall: 0.32,    // Mean Recall@10 across test users
+  ndcg: 0.28,      // Mean NDCG@10 (ranking quality)
+  coverage: 0.45   // Catalog Coverage (ratio of recommended items / total catalog items)
+}
+*/
+```
 
 ---
 
