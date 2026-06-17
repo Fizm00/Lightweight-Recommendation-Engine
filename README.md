@@ -42,6 +42,7 @@
   - [Content-Based Filtering](#8-content-based-filtering)
   - [Hybrid Recommendation Strategy](#9-hybrid-recommendation-strategy)
   - [Explainable Recommendations](#10-explainable-recommendations)
+  - [Session-Based Recommendations](#11-session-based-recommendations)
 - [Offline Evaluation Suite](#offline-evaluation-suite)
 - [Performance](#performance)
 - [API Reference](#api-reference)
@@ -359,6 +360,41 @@ Depending on the active strategy, the `reasons` field will contain:
 - **Popularity (Fallback/Cold-Start)**: Global descriptions like `"One of the most rated items"`.
 - **Hybrid**: Combined reasons merged from the base and secondary strategies.
 
+### 11. Session-Based Recommendations
+
+Generate recommendations dynamically based on the chronological sequence of item interactions within an active session. This is ideal for e-commerce shopping carts or real-time anonymous browsing where long-term history is either absent or doesn't reflect the user's immediate intent.
+
+The engine supports two session recommendation strategies:
+- `"transition"`: Calculates transition probabilities between items using a simple Markov Chain model ($A \to B$) built from historical sequence data.
+- `"similarity"` (Default): Builds a pseudo-user profile from the active session, decays past items exponentially, and delegates to item-based or content-based similarity.
+
+#### Direct Session Recommendation
+
+To generate recommendations for a session directly (e.g. for an anonymous user cart):
+
+```typescript
+const cartItems = ["item_a", "item_b"];
+
+const recs = recommender.recommendSession(cartItems, {
+  sessionStrategy: "transition", // 'transition' | 'similarity'
+  decayFactor: 0.5,             // Weights older session items lower exponentially
+  limit: 5,
+  explain: true,
+});
+```
+
+#### Auto-Session Detection
+
+If your interactions have `timestamp` fields, the engine automatically compiles transition and sequence histories. You can query standard recommendations while letting the engine automatically reconstruct the active session from the user's chronological history:
+
+```typescript
+// Reconstructs the user's active session from their history and generates sequence recommendations
+const recs = recommender.recommend("user_id", {
+  useSession: true,
+  sessionStrategy: "transition",
+});
+```
+
 ## Offline Evaluation Suite
 
 The library includes a built-in evaluation suite under the `evaluation` namespace, enabling developers to partition interaction datasets and calculate recommendation quality metrics.
@@ -482,6 +518,27 @@ Generates recommendation array for a user. Automatically delegates to the select
 | `hybridBaseStrategy` | `"item-based" \| "user-based"` | `defaultStrategy` (or `item-based`) | Collaborative filtering base strategy for hybrid. |
 | `hybridPopularityStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased"` | `defaultFallbackStrategy` (or `most-rated`) | Popularity strategy for hybrid. |
 | `explain` | `boolean` | `defaultExplain` | Whether to include explanation reasons for the recommendations. |
+| `useSession` | `boolean` | `false` | Whether to automatically detect and use the user's chronological interaction session. |
+| `sessionStrategy` | `"transition" \| "similarity"` | `"similarity"` | The strategy mode for session-based recommendation. |
+| `decayFactor` | `number` | `0.5` | Decay factor for positional items weighting. |
+| `similarityStrategy` | `"item-based" \| "content-based"` | `"item-based"` | The similarity strategy to use when session strategy is `"similarity"`. |
+
+#### `recommendSession(sessionItemIds: string[], options?: SessionRecommendationOptions): Recommendation[]`
+
+Generates recommendations based on the items in the current active session (e.g., anonymous browsing or cart items).
+
+| Option | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `sessionStrategy` | `"transition" \| "similarity"` | `"similarity"` | The strategy mode for session-based recommendation. |
+| `decayFactor` | `number` | `0.5` | Decay factor for positional items (older items get decayed by `decayFactor^(N-1-j)`). |
+| `limit` | `number` | `10` | Maximum number of recommendations to return. |
+| `explain` | `boolean` | `defaultExplain` | Whether to include explanation reasons for the recommendations. |
+| `filterCategory` | `string` | `undefined` | Optional category classification to filter recommendations by. |
+| `filterTags` | `string[]` | `undefined` | Optional tags array to filter recommendations by. |
+| `similarityStrategy` | `"item-based" \| "content-based"` | `"item-based"` | The similarity strategy to delegate to. |
+| `similarityThreshold` | `number` | `defaultSimilarityThreshold` | Minimum similarity score required. |
+| `minIntersectionSize` | `number` | `defaultMinIntersectionSize` | Minimum number of shared interactions. |
+| `k` | `number` | `defaultK` | Top K neighborhood limit for similarity. |
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 

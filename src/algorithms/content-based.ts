@@ -101,22 +101,21 @@ export function computeContentSimilarity(
 }
 
 /**
- * Recommends items for a target user using Content-Based Filtering.
+ * Recommends items for a target user vector using Content-Based Filtering.
  *
  * @param matrix The sparse interaction matrix.
- * @param userId The unique identifier of the target user.
+ * @param userVector The target user's interaction map (pseudo-user profile).
  * @param options Configurable options for the recommendation process.
  * @param cache Optional similarity cache to store computed content similarities.
  * @returns An array of ranked recommendation objects.
  */
-export function recommendContentBased(
+export function recommendContentBasedForVector(
   matrix: SparseMatrix,
-  userId: string,
+  userVector: ReadonlyMap<string, number>,
   options: ContentBasedRecommendationOptions = {},
   cache?: SimilarityCache
 ): Recommendation[] {
-  const userVector = matrix.getUserVector(userId);
-  if (!userVector || userVector.size === 0) return [];
+  if (userVector.size === 0) return [];
 
   const limit = options.limit ?? 10;
   const threshold = options.similarityThreshold ?? 0.0;
@@ -196,4 +195,24 @@ export function recommendContentBased(
   }
 
   return sortAndLimit(recommendations, limit);
+}
+
+/**
+ * Recommends items for a target user using Content-Based Filtering.
+ *
+ * @param matrix The sparse interaction matrix.
+ * @param userId The unique identifier of the target user.
+ * @param options Configurable options for the recommendation process.
+ * @param cache Optional similarity cache to store computed content similarities.
+ * @returns An array of ranked recommendation objects.
+ */
+export function recommendContentBased(
+  matrix: SparseMatrix,
+  userId: string,
+  options: ContentBasedRecommendationOptions = {},
+  cache?: SimilarityCache
+): Recommendation[] {
+  const userVector = matrix.getUserVector(userId);
+  if (!userVector || userVector.size === 0) return [];
+  return recommendContentBasedForVector(matrix, userVector, options, cache);
 }

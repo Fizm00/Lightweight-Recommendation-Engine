@@ -1,5 +1,5 @@
 import { SparseMatrix } from "./core/matrix.js";
-import type { Interaction, Recommendation, RecommendationReason, RecommenderState } from "./types/index.js";
+import type { Interaction, Recommendation, RecommendationReason, RecommenderState, SessionRecommendationOptions } from "./types/index.js";
 import {
   type ItemBasedRecommendationOptions,
   recommendForUser,
@@ -12,6 +12,7 @@ import {
   type ContentBasedRecommendationOptions,
   recommendContentBased,
 } from "./algorithms/content-based.js";
+import { recommendSessionTransition, recommendSessionSimilarity } from "./algorithms/session-based.js";
 import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popularity.js";
 import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
@@ -76,6 +77,14 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
   readonly hybridPopularityStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "content-based" | undefined;
   /** Whether to include explanation reasons for the recommendations. Optional. */
   readonly explain?: boolean;
+  /** Whether to automatically detect and use the user's chronological interaction session. Optional. */
+  readonly useSession?: boolean;
+  /** The session strategy to use: 'transition' | 'similarity'. Optional. */
+  readonly sessionStrategy?: "transition" | "similarity";
+  /** The exponential decay factor for sequential weights. Optional. */
+  readonly decayFactor?: number;
+  /** The similarity strategy to delegate to if using 'similarity' session strategy. Optional. */
+  readonly similarityStrategy?: "item-based" | "content-based";
 }
 
 /**
@@ -384,7 +393,31 @@ export class NanoRecommender {
     if (options.explain !== undefined && typeof options.explain !== "boolean") {
       throw new ValidationError("explain must be a boolean");
     }
+    if (options.useSession !== undefined && typeof options.useSession !== "boolean") {
+      throw new ValidationError("useSession must be a boolean");
+    }
     this.validateFilteringOptions(options);
+    if (options.useSession) {
+      const history = this.matrix.getUserHistory(userId);
+      if (history && history.length > 0) {
+        const sessionItemIds = history.map(h => h.itemId);
+
+        const sessionOptions: any = {};
+        if (options.sessionStrategy !== undefined) sessionOptions.sessionStrategy = options.sessionStrategy;
+        if (options.decayFactor !== undefined) sessionOptions.decayFactor = options.decayFactor;
+        if (options.limit !== undefined) sessionOptions.limit = options.limit;
+        if (options.explain !== undefined) sessionOptions.explain = options.explain;
+        if (options.filterCategory !== undefined) sessionOptions.filterCategory = options.filterCategory;
+        if (options.filterTags !== undefined) sessionOptions.filterTags = options.filterTags;
+        if (options.similarityStrategy !== undefined) sessionOptions.similarityStrategy = options.similarityStrategy;
+        if (options.similarityThreshold !== undefined) sessionOptions.similarityThreshold = options.similarityThreshold;
+        if (options.minIntersectionSize !== undefined) sessionOptions.minIntersectionSize = options.minIntersectionSize;
+        if (options.k !== undefined) sessionOptions.k = options.k;
+
+        return this.recommendSession(sessionItemIds, sessionOptions);
+      }
+    }
+
     const userVector = this.matrix.getUserVector(userId);
     const limit = options.limit ?? 10;
     const explain = options.explain ?? this.defaultExplain;
@@ -727,6 +760,73 @@ export class NanoRecommender {
         tagWeight: tagW,
         ...options,
       },
+      this.contentCache
+    );
+  }
+
+  /**
+   * Recommends items based on an active session of item interactions.
+   *
+   * @param sessionItemIds Array of item IDs in the current session (chronological order).
+   * @param options Configurable options for the session recommendation.
+   * @returns An array of ranked recommendation objects.
+   */
+  public recommendSession(
+    sessionItemIds: string[],
+    options: SessionRecommendationOptions = {}
+  ): Recommendation[] {
+    if (!Array.isArray(sessionItemIds)) {
+      throw new ValidationError("sessionItemIds must be an array");
+    }
+    if (sessionItemIds.length === 0) {
+      throw new ValidationError("sessionItemIds cannot be empty");
+    }
+    for (const itemId of sessionItemIds) {
+      if (typeof itemId !== "string" || itemId.trim() === "") {
+        throw new ValidationError("Each item in sessionItemIds must be a non-empty string");
+      }
+      if (!this.matrix.hasItem(itemId)) {
+        throw new ValidationError(`Item '${itemId}' in sessionItemIds does not exist in catalog`);
+      }
+    }
+
+    const strategy = options.sessionStrategy ?? "similarity";
+    if (strategy !== "transition" && strategy !== "similarity") {
+      throw new ValidationError(`Unknown session strategy: ${strategy}`);
+    }
+
+    if (options.decayFactor !== undefined) {
+      if (
+        typeof options.decayFactor !== "number" ||
+        Number.isNaN(options.decayFactor) ||
+        !Number.isFinite(options.decayFactor) ||
+        options.decayFactor < 0.0 ||
+        options.decayFactor > 1.0
+      ) {
+        throw new ValidationError("decayFactor must be a number between 0.0 and 1.0");
+      }
+    }
+
+    if (options.similarityStrategy !== undefined) {
+      if (options.similarityStrategy !== "item-based" && options.similarityStrategy !== "content-based") {
+        throw new ValidationError(`Unknown similarity strategy: ${options.similarityStrategy}`);
+      }
+    }
+
+    this.validateFilteringOptions(options);
+
+    const explain = options.explain ?? this.defaultExplain;
+    const finalOptions = { ...options, explain };
+
+    if (strategy === "transition") {
+      return recommendSessionTransition(this.matrix, sessionItemIds, finalOptions);
+    }
+
+    return recommendSessionSimilarity(
+      this.matrix,
+      sessionItemIds,
+      finalOptions,
+      this.itemCache,
       this.contentCache
     );
   }

@@ -151,21 +151,21 @@ function scoreCandidate(
 
 
 /**
- * Recommends items for a target user using Item-Based Collaborative Filtering.
+ * Recommends items for a user vector (pseudo-user profile) using Item-Based Collaborative Filtering.
  *
  * @param matrix The sparse interaction matrix.
- * @param userId The unique identifier of the target user.
+ * @param userVector The target user's interaction map.
  * @param options Configurable options for the recommendation process.
+ * @param cache Optional similarity cache.
  * @returns An array of ranked recommendation objects.
  */
-export function recommendForUser(
+export function recommendForUserVector(
   matrix: SparseMatrix,
-  userId: string,
+  userVector: ReadonlyMap<string, number>,
   options: ItemBasedRecommendationOptions = {},
   cache?: SimilarityCache
 ): Recommendation[] {
-  const userVector = matrix.getUserVector(userId);
-  if (!userVector || userVector.size === 0) return [];
+  if (userVector.size === 0) return [];
 
   const limit = options.limit ?? 10;
   const threshold = options.similarityThreshold ?? 0.0;
@@ -206,4 +206,23 @@ export function recommendForUser(
   }
 
   return sortAndLimit(recommendations, limit);
+}
+
+/**
+ * Recommends items for a target user using Item-Based Collaborative Filtering.
+ *
+ * @param matrix The sparse interaction matrix.
+ * @param userId The unique identifier of the target user.
+ * @param options Configurable options for the recommendation process.
+ * @returns An array of ranked recommendation objects.
+ */
+export function recommendForUser(
+  matrix: SparseMatrix,
+  userId: string,
+  options: ItemBasedRecommendationOptions = {},
+  cache?: SimilarityCache
+): Recommendation[] {
+  const userVector = matrix.getUserVector(userId);
+  if (!userVector || userVector.size === 0) return [];
+  return recommendForUserVector(matrix, userVector, options, cache);
 }

@@ -1,4 +1,4 @@
-import type { Interaction, SparseMatrixStorage, SerializedMatrixState } from "../types/index.js";
+import type { Interaction, SparseMatrixStorage, SerializedMatrixState, SerializedTransitionState } from "../types/index.js";
 import { InvalidInteractionError, ValidationError } from "../errors/index.js";
 
 /**
@@ -17,6 +17,8 @@ export class SparseMatrix {
   private readonly purchasesCount = new Map<string, number>();
   private readonly itemCategories = new Map<string, string>();
   private readonly itemTags = new Map<string, string[]>();
+  private readonly transitions = new Map<string, Map<string, number>>();
+  private readonly userHistory = new Map<string, Array<{ itemId: string; timestamp: number }>>();
 
   /**
    * Adds a single user-item interaction to the sparse matrix.
@@ -63,6 +65,51 @@ export class SparseMatrix {
     }
     if (interaction.itemTags !== undefined) {
       this.itemTags.set(itemId, interaction.itemTags);
+    }
+
+    const timestampMs = this.parseTimestamp(interaction.timestamp);
+    if (timestampMs !== undefined) {
+      let history = this.userHistory.get(userId);
+      if (!history) {
+        history = [];
+        this.userHistory.set(userId, history);
+      }
+
+      const exactIdx = history.findIndex(h => h.timestamp === timestampMs);
+      if (exactIdx !== -1) {
+        const oldItem = history[exactIdx]!.itemId;
+        if (oldItem !== itemId) {
+          if (exactIdx > 0) {
+            this.recordTransition(history[exactIdx - 1]!.itemId, oldItem, -1);
+            this.recordTransition(history[exactIdx - 1]!.itemId, itemId, 1);
+          }
+          if (exactIdx < history.length - 1) {
+            this.recordTransition(oldItem, history[exactIdx + 1]!.itemId, -1);
+            this.recordTransition(itemId, history[exactIdx + 1]!.itemId, 1);
+          }
+          history[exactIdx] = { itemId, timestamp: timestampMs };
+        }
+      } else {
+        let insertIdx = history.findIndex(h => h.timestamp > timestampMs);
+        if (insertIdx === -1) {
+          insertIdx = history.length;
+        }
+
+        const prevItem = insertIdx > 0 ? history[insertIdx - 1]!.itemId : null;
+        const nextItem = insertIdx < history.length ? history[insertIdx]!.itemId : null;
+
+        if (prevItem && nextItem) {
+          this.recordTransition(prevItem, nextItem, -1);
+        }
+        if (prevItem) {
+          this.recordTransition(prevItem, itemId, 1);
+        }
+        if (nextItem) {
+          this.recordTransition(itemId, nextItem, 1);
+        }
+
+        history.splice(insertIdx, 0, { itemId, timestamp: timestampMs });
+      }
     }
   }
 
@@ -125,7 +172,14 @@ export class SparseMatrix {
       throw new ValidationError("interactions must be an array");
     }
 
-    for (const interaction of interactions) {
+    // Sort interactions by timestamp ascending to ensure sequential transitions are processed in order
+    const sorted = [...interactions].sort((a, b) => {
+      const tA = this.parseTimestamp(a.timestamp) ?? 0;
+      const tB = this.parseTimestamp(b.timestamp) ?? 0;
+      return tA - tB;
+    });
+
+    for (const interaction of sorted) {
       this.addInteraction(interaction);
     }
   }
@@ -244,6 +298,8 @@ export class SparseMatrix {
     this.purchasesCount.clear();
     this.itemCategories.clear();
     this.itemTags.clear();
+    this.transitions.clear();
+    this.userHistory.clear();
   }
 
   /**
@@ -312,6 +368,51 @@ export class SparseMatrix {
   }
 
   /**
+   * Retrieves transitions from a given itemId.
+   *
+   * @param fromItemId The itemId representing the start of a transition.
+   * @returns A map of target item IDs and their transition counts.
+   */
+  public getTransitions(fromItemId: string): ReadonlyMap<string, number> | undefined {
+    return this.transitions.get(fromItemId);
+  }
+
+  /**
+   * Retrieves chronological history of item interactions for a user.
+   *
+   * @param userId The unique identifier of the user.
+   * @returns An array of item ID and timestamp records.
+   */
+  public getUserHistory(userId: string): ReadonlyArray<{ itemId: string; timestamp: number }> | undefined {
+    return this.userHistory.get(userId);
+  }
+
+  private parseTimestamp(t?: number | string | Date): number | undefined {
+    if (t === undefined || t === null) return undefined;
+    if (t instanceof Date) return t.getTime();
+    if (typeof t === "number") return t;
+    const parsed = Date.parse(t);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  private recordTransition(from: string, to: string, delta: number): void {
+    let fromMap = this.transitions.get(from);
+    if (!fromMap) {
+      fromMap = new Map<string, number>();
+      this.transitions.set(from, fromMap);
+    }
+    const count = (fromMap.get(to) ?? 0) + delta;
+    if (count <= 0) {
+      fromMap.delete(to);
+      if (fromMap.size === 0) {
+        this.transitions.delete(from);
+      }
+    } else {
+      fromMap.set(to, count);
+    }
+  }
+
+  /**
    * Exports the internal sparse matrix representation to a JSON-compatible object.
    *
    * @returns The serialized state of the sparse matrix.
@@ -351,6 +452,20 @@ export class SparseMatrix {
       itemTagsRecord[itemId] = tags;
     }
 
+    const transitionsRecord: Record<string, Record<string, number>> = {};
+    for (const [fromId, fromMap] of this.transitions.entries()) {
+      const toRecord: Record<string, number> = {};
+      for (const [toId, count] of fromMap.entries()) {
+        toRecord[toId] = count;
+      }
+      transitionsRecord[fromId] = toRecord;
+    }
+
+    const userHistoryRecord: Record<string, Array<{ itemId: string; timestamp: number }>> = {};
+    for (const [userId, history] of this.userHistory.entries()) {
+      userHistoryRecord[userId] = history.map(h => ({ itemId: h.itemId, timestamp: h.timestamp }));
+    }
+
     return {
       storage: storageRecord,
       ratingsCount: ratingsCountRecord,
@@ -358,6 +473,10 @@ export class SparseMatrix {
       purchasesCount: purchasesCountRecord,
       itemCategories: itemCategoriesRecord,
       itemTags: itemTagsRecord,
+      transitionState: {
+        transitions: transitionsRecord,
+        userHistory: userHistoryRecord,
+      },
     };
   }
 
@@ -487,6 +606,66 @@ export class SparseMatrix {
             }
           }
           this.itemTags.set(itemId, tags);
+        }
+      }
+
+      // Restore transitionState if present
+      if (state.transitionState !== undefined) {
+        if (typeof state.transitionState !== "object" || state.transitionState === null) {
+          throw new ValidationError("Invalid transitionState in serialized state");
+        }
+        const { transitions, userHistory } = state.transitionState;
+        if (typeof transitions !== "object" || transitions === null) {
+          throw new ValidationError("Invalid transitions in serialized transitionState");
+        }
+
+        for (const [fromId, toRecord] of Object.entries(transitions)) {
+          if (typeof fromId !== "string" || fromId.trim() === "") {
+            throw new ValidationError("Invalid fromItemId in transitions");
+          }
+          if (typeof toRecord !== "object" || toRecord === null) {
+            throw new ValidationError(`Invalid transitions record for item ${fromId}`);
+          }
+          const fromMap = new Map<string, number>();
+          for (const [toId, count] of Object.entries(toRecord)) {
+            if (typeof toId !== "string" || toId.trim() === "") {
+              throw new ValidationError(`Invalid toItemId in transitions for item ${fromId}`);
+            }
+            if (typeof count !== "number" || Number.isNaN(count) || !Number.isFinite(count) || count < 0) {
+              throw new ValidationError(`Invalid transition count for item ${fromId} to ${toId}`);
+            }
+            fromMap.set(toId, count);
+          }
+          this.transitions.set(fromId, fromMap);
+        }
+
+        if (userHistory !== undefined) {
+          if (typeof userHistory !== "object" || userHistory === null) {
+            throw new ValidationError("Invalid userHistory in serialized transitionState");
+          }
+          for (const [userId, historyArr] of Object.entries(userHistory)) {
+            if (typeof userId !== "string" || userId.trim() === "") {
+              throw new ValidationError("Invalid userId in userHistory");
+            }
+            if (!Array.isArray(historyArr)) {
+              throw new ValidationError(`Invalid history array for user ${userId}`);
+            }
+            const historyCopy: Array<{ itemId: string; timestamp: number }> = [];
+            for (const item of historyArr) {
+               if (typeof item !== "object" || item === null) {
+                 throw new ValidationError(`Invalid history item for user ${userId}`);
+               }
+               const { itemId, timestamp } = item;
+               if (typeof itemId !== "string" || itemId.trim() === "") {
+                 throw new ValidationError(`Invalid itemId in history item for user ${userId}`);
+               }
+               if (typeof timestamp !== "number" || Number.isNaN(timestamp) || !Number.isFinite(timestamp)) {
+                 throw new ValidationError(`Invalid timestamp in history item for user ${userId}`);
+               }
+               historyCopy.push({ itemId, timestamp });
+            }
+            this.userHistory.set(userId, historyCopy);
+          }
         }
       }
     } catch (error) {

@@ -72,6 +72,42 @@ export interface SerializedMatrixState {
   readonly itemCategories?: Record<string, string>;
   /** The item tags mapped by item ID. */
   readonly itemTags?: Record<string, string[]>;
+  /** Optional transition matrix and history state. */
+  readonly transitionState?: SerializedTransitionState;
+}
+
+/**
+ * Represents the serialized state of sequential transitions.
+ */
+export interface SerializedTransitionState {
+  readonly transitions: Record<string, Record<string, number>>;
+  readonly userHistory?: Record<string, Array<{ itemId: string; timestamp: number }>>;
+}
+
+/**
+ * Options for session-based recommendations.
+ */
+export interface SessionRecommendationOptions {
+  /** The session recommendation strategy: 'transition' or 'similarity'. Defaults to 'similarity'. */
+  readonly sessionStrategy?: "transition" | "similarity";
+  /** The decay factor for positional items in the active session. Defaults to 0.5. */
+  readonly decayFactor?: number;
+  /** The maximum number of recommendations to return. Optional. */
+  readonly limit?: number;
+  /** Whether to include explanation reasons for recommendations. Optional. */
+  readonly explain?: boolean;
+  /** Optional category filtering. */
+  readonly filterCategory?: string;
+  /** Optional tags filtering. */
+  readonly filterTags?: string[];
+  /** The similarity-based strategy to delegate to when using 'similarity' sessionStrategy. Defaults to 'item-based'. */
+  readonly similarityStrategy?: "item-based" | "content-based";
+  /** Optional minimum similarity threshold for recommendations. */
+  readonly similarityThreshold?: number;
+  /** Optional minimum intersection size for item-based similarity. */
+  readonly minIntersectionSize?: number;
+  /** Optional neighborhood limit (k) to use in similarity calculations. */
+  readonly k?: number;
 }
 
 /**
@@ -83,3 +119,4 @@ export interface RecommenderState {
   /** The serialized state of the sparse matrix. */
   readonly matrix: SerializedMatrixState;
 }
+

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-06-17
+
+### Added
+- **Session-Based / Sequence-Aware Recommendations**: Introduced new APIs and algorithms for generating recommendations dynamically based on active session sequences (anonymous or identified).
+  - Added public API method `recommender.recommendSession(sessionItemIds, options)` supporting two strategy modes: `"transition"` (Markov Chain probabilities) and `"similarity"` (profile/decay-based).
+  - Added option `useSession` to the standard `recommend(userId, options)` method to automatically reconstruct session sequences from chronological user history.
+  - Implemented sequential exponential decay weighting ($d^{N-j}$) with default `decayFactor = 0.5` to prioritize more recent session activities.
+  - Integrated detailed session-based explanation reasons (`explain: true`) to clarify transition-based and similarity-based recommendations.
+  - Updated `SparseMatrix` state serialization to include chronological user histories and sequential transition matrices during `exportState()` and `importState()`.
+
 ## [1.8.0] - 2026-06-17
 
 ### Added
