@@ -1,12 +1,12 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation, RecommendationReason } from "../types/index.js";
+import type { GenericRecommendation, GenericRecommendationReason } from "../types/index.js";
 import type { SimilarityCache } from "../core/cache.js";
 import { sortAndLimit } from "../utils/matrix-utils.js";
 
 /**
  * Configuration options for the content-based recommendation strategy.
  */
-export interface ContentBasedRecommendationOptions {
+export interface ContentBasedRecommendationOptions<TItem extends string | number = string> {
   /** Maximum number of recommendations to return. Defaults to 10. */
   readonly limit?: number;
   /** Minimum similarity score between items to be considered. Defaults to 0.0. */
@@ -18,9 +18,9 @@ export interface ContentBasedRecommendationOptions {
   /** Weight for the tags similarity component. Defaults to 0.5. */
   readonly tagWeight?: number;
   /** Optional filter function to include/exclude item IDs. */
-  readonly filter?: (itemId: string) => boolean;
+  readonly filter?: (itemId: TItem) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
-  readonly excludeItemIds?: string[];
+  readonly excludeItemIds?: TItem[];
   /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
   readonly k?: number | undefined;
   /** Whether to include explanation reasons for the recommendations. Optional. */
@@ -33,18 +33,11 @@ export interface ContentBasedRecommendationOptions {
 
 /**
  * Computes the content-based similarity between two items based on their category and tags.
- *
- * @param matrix The sparse interaction matrix.
- * @param itemId1 The first item ID.
- * @param itemId2 The second item ID.
- * @param categoryWeight Weight for category matching.
- * @param tagWeight Weight for tag overlap (Jaccard similarity).
- * @returns A similarity score between 0.0 and 1.0.
  */
-export function computeContentSimilarity(
-  matrix: SparseMatrix,
-  itemId1: string,
-  itemId2: string,
+export function computeContentSimilarity<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  itemId1: TItem,
+  itemId2: TItem,
   categoryWeight = 0.5,
   tagWeight = 0.5
 ): number {
@@ -102,19 +95,13 @@ export function computeContentSimilarity(
 
 /**
  * Recommends items for a target user vector using Content-Based Filtering.
- *
- * @param matrix The sparse interaction matrix.
- * @param userVector The target user's interaction map (pseudo-user profile).
- * @param options Configurable options for the recommendation process.
- * @param cache Optional similarity cache to store computed content similarities.
- * @returns An array of ranked recommendation objects.
  */
-export function recommendContentBasedForVector(
-  matrix: SparseMatrix,
-  userVector: ReadonlyMap<string, number>,
-  options: ContentBasedRecommendationOptions = {},
+export function recommendContentBasedForVector<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userVector: ReadonlyMap<TItem, number>,
+  options: ContentBasedRecommendationOptions<TItem> = {},
   cache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   if (userVector.size === 0) return [];
 
   const limit = options.limit ?? 10;
@@ -126,11 +113,11 @@ export function recommendContentBasedForVector(
   const catWeight = options.categoryWeight ?? 0.5;
   const tagWeight = options.tagWeight ?? 0.5;
 
-  const allItems = matrix.getItemIds();
+  const allItems = (matrix as any).getInternalItemIds ? (matrix as any).getInternalItemIds() : matrix.getItemIds();
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
-  const recommendations: Recommendation[] = [];
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
 
   for (const candidateId of allItems) {
     // 1. Filtering options
@@ -140,13 +127,13 @@ export function recommendContentBasedForVector(
     if (options.filterCategory !== undefined && matrix.getItemCategory(candidateId) !== options.filterCategory) continue;
     if (options.filterTags !== undefined && options.filterTags.length > 0) {
       const itemTags = matrix.getItemTags(candidateId);
-      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
+      if (!itemTags || !options.filterTags.some(t => itemTags.includes(t)) && options.filterTags.length > 0) continue;
     }
 
     // 2. Score candidate against user profile (interacted items)
     let weightedSum = 0;
     let similaritySum = 0;
-    const neighbors: { itemId: string; rating: number; sim: number }[] = [];
+    const neighbors: { itemId: TItem; rating: number; sim: number }[] = [];
 
     for (const [itemId, rating] of userVector.entries()) {
       let sim = cache?.get(itemId, candidateId);
@@ -177,13 +164,13 @@ export function recommendContentBasedForVector(
 
     const score = weightedSum / similaritySum;
 
-    let reasons: RecommendationReason[] | undefined;
+    let reasons: GenericRecommendationReason<TUser, TItem>[] | undefined;
     if (explain) {
       reasons = neighbors.map(n => ({
         triggerItemId: n.itemId,
         similarity: n.sim,
         ratingGiven: n.rating,
-        explanation: `Because you interacted with item ${n.itemId} which has similar content (${(n.sim * 100).toFixed(0)}% match)`,
+        explanation: `Because you interacted with item ${String(n.itemId)} which has similar content (${(n.sim * 100).toFixed(0)}% match)`,
       }));
     }
 
@@ -199,19 +186,13 @@ export function recommendContentBasedForVector(
 
 /**
  * Recommends items for a target user using Content-Based Filtering.
- *
- * @param matrix The sparse interaction matrix.
- * @param userId The unique identifier of the target user.
- * @param options Configurable options for the recommendation process.
- * @param cache Optional similarity cache to store computed content similarities.
- * @returns An array of ranked recommendation objects.
  */
-export function recommendContentBased(
-  matrix: SparseMatrix,
-  userId: string,
-  options: ContentBasedRecommendationOptions = {},
+export function recommendContentBased<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userId: TUser,
+  options: ContentBasedRecommendationOptions<TItem> = {},
   cache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   const userVector = matrix.getUserVector(userId);
   if (!userVector || userVector.size === 0) return [];
   return recommendContentBasedForVector(matrix, userVector, options, cache);

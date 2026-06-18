@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation, RecommendationReason } from "../types/index.js";
+import type { GenericRecommendation, GenericRecommendationReason } from "../types/index.js";
 import type { SimilarityFunction } from "./similarity.js";
 import { cosineSimilarity } from "./cosine.js";
 import { buildTransposeMatrix, sortAndLimit } from "../utils/matrix-utils.js";
@@ -8,7 +8,7 @@ import type { SimilarityCache } from "../core/cache.js";
 /**
  * Configuration options for the user-based collaborative filtering recommender.
  */
-export interface UserBasedRecommendationOptions {
+export interface UserBasedRecommendationOptions<TItem extends string | number = string> {
   /** Maximum number of recommendations to return. Defaults to 10. */
   readonly limit?: number;
   /** Minimum similarity score between users to be considered. Defaults to 0.0. */
@@ -20,9 +20,9 @@ export interface UserBasedRecommendationOptions {
   /** Minimum number of shared items required to compute similarity. Defaults to 1. */
   readonly minIntersectionSize?: number;
   /** Optional filter function to include/exclude item IDs. */
-  readonly filter?: (itemId: string) => boolean;
+  readonly filter?: (itemId: TItem) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
-  readonly excludeItemIds?: string[];
+  readonly excludeItemIds?: TItem[];
   /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
   readonly k?: number | undefined;
   /** Whether to include explanation reasons for the recommendations. Optional. */
@@ -35,18 +35,13 @@ export interface UserBasedRecommendationOptions {
 
 /**
  * Finds all other user IDs who have rated at least one item rated by the target user.
- *
- * @param userVector The target user's interaction map.
- * @param transpose The transposed item-user matrix.
- * @param userId The unique identifier of the target user.
- * @returns A Set of similar user IDs.
  */
-function findSimilarUsers(
-  userVector: ReadonlyMap<string, number>,
-  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  userId: string
-): Set<string> {
-  const similarUsers = new Set<string>();
+function findSimilarUsers<TUser extends string | number, TItem extends string | number>(
+  userVector: ReadonlyMap<TItem, number>,
+  transpose: ReadonlyMap<TItem, ReadonlyMap<TUser, number>>,
+  userId: TUser
+): Set<TUser> {
+  const similarUsers = new Set<TUser>();
   for (const itemId of userVector.keys()) {
     const userMap = transpose.get(itemId);
     if (!userMap) continue;
@@ -61,27 +56,18 @@ function findSimilarUsers(
 
 /**
  * Computes similarity score between target user and candidate similar users.
- *
- * @param userId The target user ID.
- * @param userVector The target user's interaction map.
- * @param similarUsers A Set of candidate similar user IDs.
- * @param matrix The sparse interaction matrix.
- * @param threshold The minimum similarity threshold.
- * @param simFn The similarity function to use.
- * @param cache Optional similarity cache.
- * @returns A Map of user IDs to their similarity scores.
  */
-function computeUserSimilarities(
-  userId: string,
-  userVector: ReadonlyMap<string, number>,
-  similarUsers: Set<string>,
-  matrix: SparseMatrix,
+function computeUserSimilarities<TUser extends string | number, TItem extends string | number>(
+  userId: TUser,
+  userVector: ReadonlyMap<TItem, number>,
+  similarUsers: Set<TUser>,
+  matrix: SparseMatrix<TUser, TItem>,
   threshold: number,
   simFn: SimilarityFunction,
   minIntersectionSize?: number,
   cache?: SimilarityCache
-): Map<string, number> {
-  const similarities = new Map<string, number>();
+): Map<TUser, number> {
+  const similarities = new Map<TUser, number>();
   for (const otherUserId of similarUsers) {
     const otherVector = matrix.getUserVector(otherUserId);
     if (!otherVector) continue;
@@ -99,20 +85,14 @@ function computeUserSimilarities(
 
 /**
  * Finds all candidate items rated by similar users (that target user hasn't rated).
- *
- * @param userSimilarities Map of user IDs to similarity scores.
- * @param matrix The sparse interaction matrix.
- * @param userVector The target user's interaction map.
- * @param excludeInteracted Whether to exclude target user's rated items.
- * @returns A Set of candidate item IDs.
  */
-function findCandidateItemsUB(
-  userSimilarities: Map<string, number>,
-  matrix: SparseMatrix,
-  userVector: ReadonlyMap<string, number>,
+function findCandidateItemsUB<TUser extends string | number, TItem extends string | number>(
+  userSimilarities: Map<TUser, number>,
+  matrix: SparseMatrix<TUser, TItem>,
+  userVector: ReadonlyMap<TItem, number>,
   excludeInteracted: boolean
-): Set<string> {
-  const candidates = new Set<string>();
+): Set<TItem> {
+  const candidates = new Set<TItem>();
   for (const otherUserId of userSimilarities.keys()) {
     const otherVector = matrix.getUserVector(otherUserId);
     if (!otherVector) continue;
@@ -127,25 +107,19 @@ function findCandidateItemsUB(
 
 /**
  * Calculates the predicted score for a candidate item based on similar users' ratings.
- *
- * @param candidateId The candidate item ID to predict score for.
- * @param transpose The transposed item-user matrix.
- * @param userSimilarities Map of user IDs to similarity scores.
- * @param explain Whether to include explanation reasons.
- * @returns The predicted score and optional reasons, or undefined if similarity sum is zero.
  */
-function scoreCandidateUB(
-  candidateId: string,
-  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  userSimilarities: Map<string, number>,
+function scoreCandidateUB<TUser extends string | number, TItem extends string | number>(
+  candidateId: TItem,
+  transpose: ReadonlyMap<TItem, ReadonlyMap<TUser, number>>,
+  userSimilarities: Map<TUser, number>,
   explain?: boolean
-): { score: number; reasons?: RecommendationReason[] } | undefined {
+): { score: number; reasons?: GenericRecommendationReason<TUser, TItem>[] } | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
   const userMap = transpose.get(candidateId);
   if (!userMap) return undefined;
 
-  const contributors: { userId: string; rating: number; sim: number }[] = [];
+  const contributors: { userId: TUser; rating: number; sim: number }[] = [];
 
   for (const [userId, rating] of userMap.entries()) {
     const sim = userSimilarities.get(userId);
@@ -164,7 +138,7 @@ function scoreCandidateUB(
 
   const score = weightedSum / similaritySum;
 
-  let reasons: RecommendationReason[] | undefined;
+  let reasons: GenericRecommendationReason<TUser, TItem>[] | undefined;
   if (explain) {
     reasons = contributors
       .sort((a, b) => b.sim - a.sim)
@@ -172,7 +146,7 @@ function scoreCandidateUB(
         triggerUserId: c.userId,
         similarity: c.sim,
         ratingGiven: c.rating,
-        explanation: `Because similar user ${c.userId} rated it ${c.rating}`,
+        explanation: `Because similar user ${String(c.userId)} rated it ${c.rating}`,
       }));
   }
 
@@ -184,20 +158,14 @@ function scoreCandidateUB(
 
 /**
  * Scores all candidate items using similar users' ratings.
- *
- * @param candidates A Set of candidate item IDs.
- * @param transpose The transposed item-user matrix.
- * @param userSimilarities Map of user IDs to similarity scores.
- * @param explain Whether to include explanation reasons.
- * @returns An array of recommendation objects.
  */
-function scoreCandidatesUB(
-  candidates: Set<string>,
-  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
-  userSimilarities: Map<string, number>,
+function scoreCandidatesUB<TUser extends string | number, TItem extends string | number>(
+  candidates: Set<TItem>,
+  transpose: ReadonlyMap<TItem, ReadonlyMap<TUser, number>>,
+  userSimilarities: Map<TUser, number>,
   explain?: boolean
-): Recommendation[] {
-  const recommendations: Recommendation[] = [];
+): GenericRecommendation<TItem, TUser>[] {
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
   for (const candidateId of candidates) {
     const result = scoreCandidateUB(candidateId, transpose, userSimilarities, explain);
     if (result !== undefined) {
@@ -213,19 +181,13 @@ function scoreCandidatesUB(
 
 /**
  * Recommends items for a target user using User-Based Collaborative Filtering.
- *
- * @param matrix The sparse interaction matrix.
- * @param userId The unique identifier of the target user.
- * @param options Configurable options for the recommendation process.
- * @param cache Optional similarity cache to store computed user similarities.
- * @returns An array of ranked recommendation objects.
  */
-export function recommendFromSimilarUsers(
-  matrix: SparseMatrix,
-  userId: string,
-  options: UserBasedRecommendationOptions = {},
+export function recommendFromSimilarUsers<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userId: TUser,
+  options: UserBasedRecommendationOptions<TItem> = {},
   cache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   const userVector = matrix.getUserVector(userId);
   if (!userVector || userVector.size === 0) return [];
 
@@ -256,7 +218,7 @@ export function recommendFromSimilarUsers(
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
-  const filteredCandidates = new Set<string>();
+  const filteredCandidates = new Set<TItem>();
   for (const candidateId of candidates) {
     if (excludeSet && excludeSet.has(candidateId)) continue;
     if (filterFn && !filterFn(candidateId)) continue;

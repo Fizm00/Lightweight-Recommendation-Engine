@@ -1,11 +1,8 @@
-/**
- * Represents a user-item interaction with a rating or score.
- */
-export interface Interaction {
+export interface GenericInteraction<TUser extends string | number = string, TItem extends string | number = string> {
   /** The unique identifier of the user. */
-  readonly userId: string;
+  readonly userId: TUser;
   /** The unique identifier of the item. */
-  readonly itemId: string;
+  readonly itemId: TItem;
   /** The interaction rating, score, weight or count value. */
   readonly rating: number;
   /** The type of interaction, e.g. 'view', 'purchase', 'rate'. */
@@ -18,14 +15,13 @@ export interface Interaction {
   readonly itemTags?: string[];
 }
 
-/**
- * Represents the reason behind a recommendation.
- */
-export interface RecommendationReason {
+export interface Interaction extends GenericInteraction<string, string> {}
+
+export interface GenericRecommendationReason<TUser extends string | number = string, TItem extends string | number = string> {
   /** The item ID that triggered this recommendation. */
-  readonly triggerItemId?: string;
+  readonly triggerItemId?: TItem;
   /** The user ID that triggered this recommendation. */
-  readonly triggerUserId?: string;
+  readonly triggerUserId?: TUser;
   /** The similarity score between the target and the trigger entity. */
   readonly similarity: number;
   /** The rating value given to/by the trigger entity. */
@@ -34,27 +30,31 @@ export interface RecommendationReason {
   readonly explanation: string;
 }
 
+export interface RecommendationReason extends GenericRecommendationReason<string, string> {}
+
 /**
  * Represents a recommendation result for an item.
  */
-export interface Recommendation {
+export interface GenericRecommendation<TItem extends string | number = string, TUser extends string | number = string> {
   /** The unique identifier of the recommended item. */
-  readonly itemId: string;
+  readonly itemId: TItem;
   /** The recommendation score calculated by the engine. */
   readonly score: number;
   /** Optional explanation details of why this recommendation was generated. */
-  readonly reasons?: RecommendationReason[];
+  readonly reasons?: GenericRecommendationReason<TUser, TItem>[];
 }
+
+export interface Recommendation extends GenericRecommendation<string, string> {}
 
 /**
  * A user's profile represented as a map of item IDs to rating values.
  */
-export type UserVector = Map<string, number>;
+export type UserVector<TItem extends string | number = string> = Map<TItem, number>;
 
 /**
  * The sparse matrix representation mapping user IDs to their respective user vectors.
  */
-export type SparseMatrixStorage = Map<string, UserVector>;
+export type SparseMatrixStorage<TUser extends string | number = string, TItem extends string | number = string> = Map<TUser, UserVector<TItem>>;
 
 /**
  * Represents the serialized state of the sparse matrix storage.

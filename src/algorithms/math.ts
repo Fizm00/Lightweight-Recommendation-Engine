@@ -4,7 +4,7 @@
  * @param vector The sparse vector representation.
  * @returns The Euclidean magnitude of the vector.
  */
-export function calculateMagnitude(vector: ReadonlyMap<string, number>): number {
+export function calculateMagnitude<T = string | number>(vector: ReadonlyMap<T, number>): number {
   let sumOfSquares = 0;
   for (const rating of vector.values()) {
     sumOfSquares += rating * rating;
@@ -22,9 +22,9 @@ export function calculateMagnitude(vector: ReadonlyMap<string, number>): number 
  * @param v2 The second sparse vector.
  * @returns The dot product value.
  */
-export function calculateDotProduct(
-  v1: ReadonlyMap<string, number>,
-  v2: ReadonlyMap<string, number>
+export function calculateDotProduct<T = string | number>(
+  v1: ReadonlyMap<T, number>,
+  v2: ReadonlyMap<T, number>
 ): number {
   if (v1.size === 0 || v2.size === 0) {
     return 0;
@@ -51,8 +51,8 @@ export function calculateDotProduct(
  * @param vector The sparse vector to normalize.
  * @returns A new Map representing the normalized sparse vector.
  */
-export function normalizeVector(vector: ReadonlyMap<string, number>): Map<string, number> {
-  const normalized = new Map<string, number>();
+export function normalizeVector<T = string | number>(vector: ReadonlyMap<T, number>): Map<T, number> {
+  const normalized = new Map<T, number>();
   const magnitude = calculateMagnitude(vector);
 
   if (magnitude === 0) {
@@ -75,9 +75,9 @@ export function normalizeVector(vector: ReadonlyMap<string, number>): Map<string
  * @param v2 The second sparse vector.
  * @returns The count of shared items.
  */
-export function intersectionSize(
-  v1: ReadonlyMap<string, number>,
-  v2: ReadonlyMap<string, number>
+export function intersectionSize<T = string | number>(
+  v1: ReadonlyMap<T, number>,
+  v2: ReadonlyMap<T, number>
 ): number {
   if (v1.size === 0 || v2.size === 0) {
     return 0;
@@ -104,11 +104,11 @@ export function intersectionSize(
  * @param v2 The second sparse vector.
  * @returns A Set containing the shared item IDs.
  */
-export function sharedItems(
-  v1: ReadonlyMap<string, number>,
-  v2: ReadonlyMap<string, number>
-): Set<string> {
-  const shared = new Set<string>();
+export function sharedItems<T = string | number>(
+  v1: ReadonlyMap<T, number>,
+  v2: ReadonlyMap<T, number>
+): Set<T> {
+  const shared = new Set<T>();
   if (v1.size === 0 || v2.size === 0) {
     return shared;
   }

@@ -1,5 +1,13 @@
 import { SparseMatrix } from "./core/matrix.js";
-import type { Interaction, Recommendation, RecommendationReason, RecommenderState, SessionRecommendationOptions } from "./types/index.js";
+import type {
+  Interaction,
+  Recommendation,
+  RecommendationReason,
+  RecommenderState,
+  SessionRecommendationOptions,
+  GenericRecommendation,
+  GenericRecommendationReason
+} from "./types/index.js";
 import {
   type ItemBasedRecommendationOptions,
   recommendForUser,
@@ -18,7 +26,6 @@ import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
 import { sortAndLimit } from "./utils/matrix-utils.js";
 import { loadWasm } from "./wasm/loader.js";
-
 
 /**
  * Configuration options for the NanoRecommender engine.
@@ -95,7 +102,8 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
  * for loading datasets and running recommendation queries without exposing internals.
  */
 export class NanoRecommender {
-  private readonly matrix = new SparseMatrix();
+  private readonly matrix = new SparseMatrix<number, number>({ useIntegerMapping: true });
+
   private readonly itemCache: SimilarityCache;
   private readonly userCache: SimilarityCache;
   private readonly contentCache: SimilarityCache;
@@ -113,7 +121,6 @@ export class NanoRecommender {
   private lastReferenceTimeMs = Date.now();
   private lastItemMinIntersectionSize: number | undefined;
   private lastUserMinIntersectionSize: number | undefined;
-
 
   /**
    * Constructs a new NanoRecommender instance.
@@ -235,11 +242,147 @@ export class NanoRecommender {
     }
 
     this.itemCache = new SimilarityCache(maxCacheSize);
+    this.itemCache.toInternal = (id) => this.matrix.toInternalItem(id);
     this.userCache = new SimilarityCache(maxCacheSize);
+    this.userCache.toInternal = (id) => this.matrix.toInternalUser(id);
     this.contentCache = new SimilarityCache(maxCacheSize);
+    this.contentCache.toInternal = (id) => this.matrix.toInternalItem(id);
 
     loadWasm().catch(() => {
       // Fallback silently
+    });
+  }
+
+  private mapOptionsFilters(options: any): any {
+    const mapped: any = {};
+    for (const [key, val] of Object.entries(options)) {
+      if (val !== undefined) {
+        mapped[key] = val;
+      }
+    }
+    if (options.filter) {
+      mapped.filter = (iIdx: number) => {
+        const originalItemId = this.matrix.getOriginalItemId(iIdx);
+        return originalItemId !== undefined ? options.filter!(originalItemId) : false;
+      };
+    }
+    if (options.excludeItemIds) {
+      mapped.excludeItemIds = options.excludeItemIds
+        .map((id: string) => this.matrix.lookupInternalItem(id))
+        .filter((id: any): id is number => id !== undefined);
+    }
+    return mapped;
+  }
+
+  private extractItemBasedOptions(options: any): ItemBasedRecommendationOptions<number> {
+    const keys = [
+      "limit",
+      "similarityThreshold",
+      "excludeInteracted",
+      "similarityFunction",
+      "minIntersectionSize",
+      "filter",
+      "excludeItemIds",
+      "k",
+      "explain",
+      "filterCategory",
+      "filterTags"
+    ];
+    const extracted: any = {};
+    for (const key of keys) {
+      if (options[key] !== undefined) {
+        extracted[key] = options[key];
+      }
+    }
+    return extracted;
+  }
+
+  private extractUserBasedOptions(options: any): UserBasedRecommendationOptions<number> {
+    const keys = [
+      "limit",
+      "similarityThreshold",
+      "excludeInteracted",
+      "similarityFunction",
+      "minIntersectionSize",
+      "filter",
+      "excludeItemIds",
+      "k",
+      "explain",
+      "filterCategory",
+      "filterTags"
+    ];
+    const extracted: any = {};
+    for (const key of keys) {
+      if (options[key] !== undefined) {
+        extracted[key] = options[key];
+      }
+    }
+    return extracted;
+  }
+
+  private extractContentBasedOptions(options: any): ContentBasedRecommendationOptions<number> {
+    const keys = [
+      "limit",
+      "similarityThreshold",
+      "excludeInteracted",
+      "categoryWeight",
+      "tagWeight",
+      "filter",
+      "excludeItemIds",
+      "k",
+      "explain",
+      "filterCategory",
+      "filterTags"
+    ];
+    const extracted: any = {};
+    for (const key of keys) {
+      if (options[key] !== undefined) {
+        extracted[key] = options[key];
+      }
+    }
+    return extracted;
+  }
+
+  private mapRecommendationsToOriginal(recs: GenericRecommendation<number, number>[], explain?: boolean): Recommendation[] {
+    return recs.map(rec => {
+      const originalItemId = this.matrix.getOriginalItemId(rec.itemId);
+      if (originalItemId === undefined) {
+        throw new Error(`Internal inconsistency: itemId ${rec.itemId} not found in map`);
+      }
+
+      let reasons: RecommendationReason[] | undefined;
+      if (explain && rec.reasons) {
+        reasons = rec.reasons.map(reason => {
+          const res: any = {
+            similarity: reason.similarity,
+            explanation: reason.explanation,
+          };
+          if (reason.triggerItemId !== undefined) {
+            const mappedItem = this.matrix.getOriginalItemId(reason.triggerItemId);
+            if (mappedItem !== undefined) {
+              res.triggerItemId = mappedItem;
+              res.explanation = res.explanation.replace(new RegExp(`item ${reason.triggerItemId}\\b`, 'g'), `item ${mappedItem}`);
+            }
+          }
+          if (reason.triggerUserId !== undefined) {
+            const mappedUser = this.matrix.getOriginalUserId(reason.triggerUserId);
+            if (mappedUser !== undefined) {
+              res.triggerUserId = mappedUser;
+              res.explanation = res.explanation.replace(new RegExp(`user ${reason.triggerUserId}\\b`, 'g'), `user ${mappedUser}`);
+            }
+          }
+          if (reason.ratingGiven !== undefined) {
+            res.ratingGiven = reason.ratingGiven;
+          }
+          return res;
+        });
+      }
+
+      return {
+        itemId: originalItemId,
+        score: rec.score,
+        ...(reasons ? { reasons } : {}),
+      };
     });
   }
 
@@ -320,7 +463,7 @@ export class NanoRecommender {
       };
     });
 
-    this.matrix.addInteractions(processedInteractions);
+    this.matrix.addInteractions(processedInteractions as any);
     this.itemCache.clear();
     this.userCache.clear();
     this.contentCache.clear();
@@ -378,12 +521,18 @@ export class NanoRecommender {
     this.matrix.addInteraction({
       ...interaction,
       rating: processedRating,
-    });
+    } as any);
 
     // 4. Invalidate specific cache entries
-    this.itemCache.invalidate(itemId);
-    this.userCache.invalidate(userId);
-    this.contentCache.invalidate(itemId);
+    const uIdx = this.matrix.lookupInternalUser(userId);
+    const iIdx = this.matrix.lookupInternalItem(itemId);
+    if (iIdx !== undefined) {
+      this.itemCache.invalidate(iIdx);
+      this.contentCache.invalidate(iIdx);
+    }
+    if (uIdx !== undefined) {
+      this.userCache.invalidate(uIdx);
+    }
   }
 
   /**
@@ -401,8 +550,29 @@ export class NanoRecommender {
       throw new ValidationError("useSession must be a boolean");
     }
     this.validateFilteringOptions(options);
+
+    const catW = options.categoryWeight;
+    const tagW = options.tagWeight;
+    if (catW !== undefined) {
+      if (typeof catW !== "number" || Number.isNaN(catW) || catW < 0.0 || catW > 1.0) {
+        throw new ValidationError("categoryWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (tagW !== undefined) {
+      if (typeof tagW !== "number" || Number.isNaN(tagW) || tagW < 0.0 || tagW > 1.0) {
+        throw new ValidationError("tagWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (catW !== undefined && tagW !== undefined) {
+      if (Math.abs(catW + tagW - 1.0) > 1e-9) {
+        throw new ValidationError("categoryWeight and tagWeight must sum to 1.0");
+      }
+    }
+
+    const explain = options.explain ?? this.defaultExplain;
+
     if (options.useSession) {
-      const history = this.matrix.getUserHistory(userId);
+      const history = this.matrix.getUserHistory(userId as any);
       if (history && history.length > 0) {
         const sessionItemIds = history.map(h => h.itemId);
 
@@ -418,16 +588,17 @@ export class NanoRecommender {
         if (options.minIntersectionSize !== undefined) sessionOptions.minIntersectionSize = options.minIntersectionSize;
         if (options.k !== undefined) sessionOptions.k = options.k;
 
-        return this.recommendSession(sessionItemIds, sessionOptions);
+        const mappedSessionItemIds = sessionItemIds.map(id => this.matrix.lookupInternalItem(id));
+        const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, sessionOptions);
+        return this.mapRecommendationsToOriginal(internalRecs, explain);
       }
     }
 
-    const userVector = this.matrix.getUserVector(userId);
+    const uIdx = this.matrix.lookupInternalUser(userId);
     const limit = options.limit ?? 10;
-    const explain = options.explain ?? this.defaultExplain;
     const combinedOptions = { ...options, explain };
 
-    if (!userVector || userVector.size === 0) {
+    if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
       return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, combinedOptions);
     }
 
@@ -437,34 +608,31 @@ export class NanoRecommender {
     const k = options.k ?? this.defaultK;
     const finalOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...combinedOptions };
 
+    let internalRecs: GenericRecommendation<number, number>[];
+    const mapped = this.mapOptionsFilters(finalOptions);
     if (strategy === "hybrid") {
-      return this.recommendHybrid(userId, finalOptions);
+      internalRecs = this.recommendHybridInternal(uIdx, finalOptions);
+    } else if (strategy === "user-based") {
+      const cleanMapped = this.extractUserBasedOptions(mapped);
+      internalRecs = this.recommendUserBasedInternal(uIdx, cleanMapped);
+    } else if (strategy === "content-based") {
+      const cleanMapped = this.extractContentBasedOptions(mapped);
+      internalRecs = this.recommendContentBasedInternal(uIdx, cleanMapped);
+    } else {
+      const cleanMapped = this.extractItemBasedOptions(mapped);
+      internalRecs = this.recommendItemBasedInternal(uIdx, cleanMapped);
     }
-    if (strategy === "user-based") {
-      return this.recommendUserBased(userId, finalOptions);
-    }
-    if (strategy === "content-based") {
-      return this.recommendContentBased(userId, finalOptions);
-    }
-    return this.recommendItemBased(userId, finalOptions);
+
+    return this.mapRecommendationsToOriginal(internalRecs, explain);
   }
 
-
   /**
-   * Generates recommendations using a Hybrid Strategy combining CF and Popularity scores.
-   *
-   * @param userId The unique identifier of the target user.
-   * @param options Recommendation options containing hybrid strategy configs.
-   * @returns An array of ranked recommendation objects.
+   * Generates recommendations using a Hybrid Strategy combining CF and Popularity scores (internal).
    */
-  public recommendHybrid(
-    userId: string,
+  private recommendHybridInternal(
+    uIdx: number,
     options: RecommendationOptions = {}
-  ): Recommendation[] {
-    if (options.explain !== undefined && typeof options.explain !== "boolean") {
-      throw new ValidationError("explain must be a boolean");
-    }
-    this.validateFilteringOptions(options);
+  ): GenericRecommendation<number, number>[] {
     const limit = options.limit ?? 10;
     const explain = options.explain ?? this.defaultExplain;
 
@@ -479,24 +647,22 @@ export class NanoRecommender {
     const popStrategy = options.hybridPopularityStrategy ??
       (this.defaultFallback === "none" ? "most-rated" : this.defaultFallback as any);
 
+    const mappedOptions = this.mapOptionsFilters(options);
+
     if (popStrategy === "content-based") {
-      // 1. Get base strategy recommendations
       const baseRecs = baseStrategy === "user-based"
-        ? this.recommendUserBased(userId, { ...options, limit: Infinity, explain })
+        ? this.recommendUserBasedInternal(uIdx, this.extractUserBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }))
         : baseStrategy === "content-based"
-        ? this.recommendContentBased(userId, { ...options, limit: Infinity, explain })
-        : this.recommendItemBased(userId, { ...options, limit: Infinity, explain });
+        ? this.recommendContentBasedInternal(uIdx, this.extractContentBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }))
+        : this.recommendItemBasedInternal(uIdx, this.extractItemBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }));
 
-      // 2. Get secondary content-based recommendations
-      const cbRecs = this.recommendContentBased(userId, { ...options, limit: Infinity, explain });
+      const cbRecs = this.recommendContentBasedInternal(uIdx, this.extractContentBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }));
 
-      // Handle cold start if both lists are empty
       if (baseRecs.length === 0 && cbRecs.length === 0) {
-        return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+        return [];
       }
 
-      // Map item IDs to their recommendation objects for fast lookup
-      const baseMap = new Map<string, Recommendation>();
+      const baseMap = new Map<number, GenericRecommendation<number, number>>();
       let minBase = Infinity;
       let maxBase = -Infinity;
       for (const rec of baseRecs) {
@@ -509,7 +675,7 @@ export class NanoRecommender {
         maxBase = 0.0;
       }
 
-      const cbMap = new Map<string, Recommendation>();
+      const cbMap = new Map<number, GenericRecommendation<number, number>>();
       let minCb = Infinity;
       let maxCb = -Infinity;
       for (const rec of cbRecs) {
@@ -522,9 +688,8 @@ export class NanoRecommender {
         maxCb = 0.0;
       }
 
-      // Gather all unique item IDs
-      const allItemIds = new Set<string>([...baseMap.keys(), ...cbMap.keys()]);
-      const hybridRecs: Recommendation[] = [];
+      const allItemIds = new Set<number>([...baseMap.keys(), ...cbMap.keys()]);
+      const hybridRecs: GenericRecommendation<number, number>[] = [];
 
       for (const itemId of allItemIds) {
         const baseRec = baseMap.get(itemId);
@@ -548,11 +713,10 @@ export class NanoRecommender {
           continue;
         }
 
-        let reasons: RecommendationReason[] | undefined;
+        let reasons: GenericRecommendationReason<number, number>[] | undefined;
         if (explain) {
           const baseReasons = baseRec?.reasons ?? [];
           const cbReasons = cbRec?.reasons ?? [];
-          
           const combinedReasons = [...baseReasons, ...cbReasons];
           if (combinedReasons.length > 0) {
             combinedReasons.sort((a, b) => b.similarity - a.similarity);
@@ -569,19 +733,17 @@ export class NanoRecommender {
 
       return sortAndLimit(hybridRecs, limit);
     } else {
-      // Get all collaborative/base filtering candidates (limit: Infinity)
-      const cfOptions = { ...options, limit: Infinity, explain };
       const cfRecs = baseStrategy === "user-based"
-        ? this.recommendUserBased(userId, cfOptions)
+        ? this.recommendUserBasedInternal(uIdx, this.extractUserBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }))
         : baseStrategy === "content-based"
-        ? this.recommendContentBased(userId, cfOptions)
-        : this.recommendItemBased(userId, cfOptions);
+        ? this.recommendContentBasedInternal(uIdx, this.extractContentBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }))
+        : this.recommendItemBasedInternal(uIdx, this.extractItemBasedOptions({ ...(mappedOptions as any), limit: Infinity, explain }));
 
       if (cfRecs.length === 0) {
-        return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+        return [];
       }
 
-      let popMap: ReadonlyMap<string, number>;
+      let popMap: ReadonlyMap<number, number>;
       if (popStrategy === "most-viewed") {
         popMap = this.matrix.getViewsCountMap();
       } else if (popStrategy === "most-purchased") {
@@ -590,7 +752,6 @@ export class NanoRecommender {
         popMap = this.matrix.getRatingsCountMap();
       }
 
-      // Gather scores for Min-Max Normalization
       let minCf = Infinity;
       let maxCf = -Infinity;
       let minPop = Infinity;
@@ -609,8 +770,7 @@ export class NanoRecommender {
         return { itemId: rec.itemId, cfScore, popScore, reasons };
       });
 
-      // Compute blended hybrid scores
-      const hybridRecs: Recommendation[] = itemsData.map(item => {
+      const hybridRecs: GenericRecommendation<number, number>[] = itemsData.map(item => {
         const normCf = maxCf === minCf ? 1.0 : (item.cfScore - minCf) / (maxCf - minCf);
         const normPop = maxPop === minPop ? 1.0 : (item.popScore - minPop) / (maxPop - minPop);
 
@@ -627,6 +787,33 @@ export class NanoRecommender {
   }
 
   /**
+   * Generates recommendations using a Hybrid Strategy combining CF and Popularity scores.
+   *
+   * @param userId The unique identifier of the target user.
+   * @param options Recommendation options containing hybrid strategy configs.
+   * @returns An array of ranked recommendation objects.
+   */
+  public recommendHybrid(
+    userId: string,
+    options: RecommendationOptions = {}
+  ): Recommendation[] {
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+    this.validateFilteringOptions(options);
+    const limit = options.limit ?? 10;
+    const explain = options.explain ?? this.defaultExplain;
+
+    const uIdx = this.matrix.lookupInternalUser(userId);
+    if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+    }
+
+    const internalRecs = this.recommendHybridInternal(uIdx, options);
+    return this.mapRecommendationsToOriginal(internalRecs, explain);
+  }
+
+  /**
    * Handles recommendation for cold-start users.
    */
   private handleColdStart(
@@ -634,16 +821,41 @@ export class NanoRecommender {
     limit: number,
     options: RecommendationOptions = {}
   ): Recommendation[] {
+    const mapped = this.mapOptionsFilters(options);
+    let internalRecs: GenericRecommendation<number, number>[];
     if (strategy === "most-viewed") {
-      return getMostViewed(this.matrix, limit, options);
+      internalRecs = getMostViewed(this.matrix, limit, mapped);
+    } else if (strategy === "most-purchased") {
+      internalRecs = getMostPurchased(this.matrix, limit, mapped);
+    } else if (strategy === "most-rated") {
+      internalRecs = getMostRated(this.matrix, limit, mapped);
+    } else {
+      return [];
     }
-    if (strategy === "most-purchased") {
-      return getMostPurchased(this.matrix, limit, options);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain);
+  }
+
+  private recommendItemBasedInternal(
+    uIdx: number,
+    options: ItemBasedRecommendationOptions<number> = {}
+  ): GenericRecommendation<number, number>[] {
+    const threshold = options.similarityThreshold ?? this.defaultThreshold;
+    const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
+    const k = options.k ?? this.defaultK;
+    const explain = options.explain ?? this.defaultExplain;
+
+    if (this.lastItemMinIntersectionSize !== undefined && this.lastItemMinIntersectionSize !== minIntersection) {
+      this.itemCache.clear();
     }
-    if (strategy === "most-rated") {
-      return getMostRated(this.matrix, limit, options);
-    }
-    return [];
+    this.lastItemMinIntersectionSize = minIntersection;
+
+    const extracted = this.extractItemBasedOptions(options);
+    return recommendForUser(
+      this.matrix,
+      uIdx,
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...extracted },
+      this.itemCache
+    );
   }
 
   /**
@@ -655,25 +867,44 @@ export class NanoRecommender {
    */
   public recommendItemBased(
     userId: string,
-    options: ItemBasedRecommendationOptions = {}
+    options: RecommendationOptions = {}
   ): Recommendation[] {
     if (options.explain !== undefined && typeof options.explain !== "boolean") {
       throw new ValidationError("explain must be a boolean");
     }
     this.validateFilteringOptions(options);
+
+    const uIdx = this.matrix.lookupInternalUser(userId);
+    if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, options);
+    }
+
+    const mapped = this.mapOptionsFilters(options);
+    const cleanMapped = this.extractItemBasedOptions(mapped);
+    const internalRecs = this.recommendItemBasedInternal(uIdx, cleanMapped);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain);
+  }
+
+  private recommendUserBasedInternal(
+    uIdx: number,
+    options: UserBasedRecommendationOptions<number> = {}
+  ): GenericRecommendation<number, number>[] {
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
     const k = options.k ?? this.defaultK;
     const explain = options.explain ?? this.defaultExplain;
-    if (this.lastItemMinIntersectionSize !== undefined && this.lastItemMinIntersectionSize !== minIntersection) {
-      this.itemCache.clear();
+
+    if (this.lastUserMinIntersectionSize !== undefined && this.lastUserMinIntersectionSize !== minIntersection) {
+      this.userCache.clear();
     }
-    this.lastItemMinIntersectionSize = minIntersection;
-    return recommendForUser(
+    this.lastUserMinIntersectionSize = minIntersection;
+
+    const extracted = this.extractUserBasedOptions(options);
+    return recommendFromSimilarUsers(
       this.matrix,
-      userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...options },
-      this.itemCache
+      uIdx,
+      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...extracted },
+      this.userCache
     );
   }
 
@@ -686,25 +917,34 @@ export class NanoRecommender {
    */
   public recommendUserBased(
     userId: string,
-    options: UserBasedRecommendationOptions = {}
+    options: RecommendationOptions = {}
   ): Recommendation[] {
     if (options.explain !== undefined && typeof options.explain !== "boolean") {
       throw new ValidationError("explain must be a boolean");
     }
     this.validateFilteringOptions(options);
-    const threshold = options.similarityThreshold ?? this.defaultThreshold;
-    const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
-    const k = options.k ?? this.defaultK;
-    const explain = options.explain ?? this.defaultExplain;
-    if (this.lastUserMinIntersectionSize !== undefined && this.lastUserMinIntersectionSize !== minIntersection) {
-      this.userCache.clear();
+
+    const uIdx = this.matrix.lookupInternalUser(userId);
+    if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, options);
     }
-    this.lastUserMinIntersectionSize = minIntersection;
-    return recommendFromSimilarUsers(
+
+    const mapped = this.mapOptionsFilters(options);
+    const cleanMapped = this.extractUserBasedOptions(mapped);
+    const internalRecs = this.recommendUserBasedInternal(uIdx, cleanMapped);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain);
+  }
+
+  private recommendContentBasedInternal(
+    uIdx: number,
+    options: ContentBasedRecommendationOptions<number> = {}
+  ): GenericRecommendation<number, number>[] {
+    const extracted = this.extractContentBasedOptions(options);
+    return recommendContentBased(
       this.matrix,
-      userId,
-      { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, explain, ...options },
-      this.userCache
+      uIdx,
+      extracted,
+      this.contentCache
     );
   }
 
@@ -717,7 +957,7 @@ export class NanoRecommender {
    */
   public recommendContentBased(
     userId: string,
-    options: ContentBasedRecommendationOptions = {}
+    options: RecommendationOptions = {}
   ): Recommendation[] {
     if (options.explain !== undefined && typeof options.explain !== "boolean") {
       throw new ValidationError("explain must be a boolean");
@@ -753,17 +993,37 @@ export class NanoRecommender {
     const k = options.k ?? this.defaultK;
     const explain = options.explain ?? this.defaultExplain;
 
-    return recommendContentBased(
+    const uIdx = this.matrix.lookupInternalUser(userId);
+    if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, options);
+    }
+
+    const mapped = this.mapOptionsFilters(options);
+    const cleanMapped = this.extractContentBasedOptions({
+      similarityThreshold: threshold,
+      k,
+      explain,
+      categoryWeight: catW,
+      tagWeight: tagW,
+      ...mapped,
+    });
+    const internalRecs = this.recommendContentBasedInternal(uIdx, cleanMapped);
+    return this.mapRecommendationsToOriginal(internalRecs, explain);
+  }
+
+  private recommendSessionInternal(
+    sessionItemIds: number[],
+    options: SessionRecommendationOptions = {}
+  ): GenericRecommendation<number, number>[] {
+    const strategy = options.sessionStrategy ?? "similarity";
+    if (strategy === "transition") {
+      return recommendSessionTransition(this.matrix, sessionItemIds, options);
+    }
+    return recommendSessionSimilarity(
       this.matrix,
-      userId,
-      {
-        similarityThreshold: threshold,
-        k,
-        explain,
-        categoryWeight: catW,
-        tagWeight: tagW,
-        ...options,
-      },
+      sessionItemIds,
+      options,
+      this.itemCache,
       this.contentCache
     );
   }
@@ -785,13 +1045,16 @@ export class NanoRecommender {
     if (sessionItemIds.length === 0) {
       throw new ValidationError("sessionItemIds cannot be empty");
     }
+    const mappedSessionItemIds: number[] = [];
     for (const itemId of sessionItemIds) {
       if (typeof itemId !== "string" || itemId.trim() === "") {
         throw new ValidationError("Each item in sessionItemIds must be a non-empty string");
       }
-      if (!this.matrix.hasItem(itemId)) {
+      const iIdx = this.matrix.lookupInternalItem(itemId);
+      if (iIdx === undefined || !this.matrix.hasItem(iIdx as any)) {
         throw new ValidationError(`Item '${itemId}' in sessionItemIds does not exist in catalog`);
       }
+      mappedSessionItemIds.push(iIdx);
     }
 
     const strategy = options.sessionStrategy ?? "similarity";
@@ -820,19 +1083,9 @@ export class NanoRecommender {
     this.validateFilteringOptions(options);
 
     const explain = options.explain ?? this.defaultExplain;
-    const finalOptions = { ...options, explain };
-
-    if (strategy === "transition") {
-      return recommendSessionTransition(this.matrix, sessionItemIds, finalOptions);
-    }
-
-    return recommendSessionSimilarity(
-      this.matrix,
-      sessionItemIds,
-      finalOptions,
-      this.itemCache,
-      this.contentCache
-    );
+    const mapped = this.mapOptionsFilters(options);
+    const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, mapped);
+    return this.mapRecommendationsToOriginal(internalRecs, explain);
   }
 
   /**
@@ -892,7 +1145,10 @@ export class NanoRecommender {
       throw new ValidationError("RecommenderState is missing matrix payload");
     }
 
+    this.clear();
+
     this.matrix.importState(state.matrix);
+
     this.itemCache.clear();
     this.userCache.clear();
     this.contentCache.clear();

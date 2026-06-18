@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation, RecommendationReason } from "../types/index.js";
+import type { GenericRecommendation, GenericRecommendationReason } from "../types/index.js";
 import type { SimilarityFunction } from "./similarity.js";
 import { cosineSimilarity } from "./cosine.js";
 import { buildTransposeMatrix, sortAndLimit } from "../utils/matrix-utils.js";
@@ -8,7 +8,7 @@ import type { SimilarityCache } from "../core/cache.js";
 /**
  * Configuration options for the item-based collaborative filtering recommender.
  */
-export interface ItemBasedRecommendationOptions {
+export interface ItemBasedRecommendationOptions<TItem extends string | number = string> {
   /** Maximum number of recommendations to return. Defaults to 10. */
   readonly limit?: number;
   /** Minimum similarity score between items to be considered. Defaults to 0.0. */
@@ -20,9 +20,9 @@ export interface ItemBasedRecommendationOptions {
   /** Minimum number of shared items required to compute similarity. Defaults to 1. */
   readonly minIntersectionSize?: number;
   /** Optional filter function to include/exclude item IDs. */
-  readonly filter?: (itemId: string) => boolean;
+  readonly filter?: (itemId: TItem) => boolean;
   /** Optional array of item IDs to exclude from recommendations. */
-  readonly excludeItemIds?: string[];
+  readonly excludeItemIds?: TItem[];
   /** Limit the similarity calculation to the top k nearest neighbors. Optional. */
   readonly k?: number | undefined;
   /** Whether to include explanation reasons for the recommendations. Optional. */
@@ -33,24 +33,16 @@ export interface ItemBasedRecommendationOptions {
   readonly filterTags?: string[];
 }
 
-
-
 /**
  * Finds candidate items for a user by finding items rated by users who rated common items.
- *
- * @param matrix The sparse interaction matrix.
- * @param userVector The target user's interaction map.
- * @param transpose The transposed item-user matrix.
- * @param excludeInteracted Whether to exclude target user's rated items.
- * @returns A Set of candidate item IDs.
  */
-function findCandidateItems(
-  matrix: SparseMatrix,
-  userVector: ReadonlyMap<string, number>,
-  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
+function findCandidateItems<TUser extends string | number, TItem extends string | number>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userVector: ReadonlyMap<TItem, number>,
+  transpose: ReadonlyMap<TItem, ReadonlyMap<TUser, number>>,
   excludeInteracted: boolean
-): Map<string, Set<string>> {
-  const candidates = new Map<string, Set<string>>();
+): Map<TItem, Set<TItem>> {
+  const candidates = new Map<TItem, Set<TItem>>();
   for (const itemId of userVector.keys()) {
     const userMap = transpose.get(itemId);
     if (!userMap) continue;
@@ -61,7 +53,7 @@ function findCandidateItems(
         if (!excludeInteracted || !userVector.has(candidateId)) {
           let shared = candidates.get(candidateId);
           if (!shared) {
-            shared = new Set<string>();
+            shared = new Set<TItem>();
             candidates.set(candidateId, shared);
           }
           shared.add(itemId);
@@ -74,35 +66,25 @@ function findCandidateItems(
 
 /**
  * Calculates the predicted score for a candidate item using weighted average.
- *
- * @param userVector The target user's interaction map.
- * @param candidateId The candidate item ID to predict score for.
- * @param transpose The transposed item-user matrix.
- * @param similarityThreshold The minimum similarity threshold.
- * @param simFn The similarity function to use.
- * @param cache Optional similarity cache.
- * @param explain Whether to include explanation reasons.
- * @param sharedItems Optional set of items from the user profile that share users with the candidate.
- * @returns The predicted rating score and optional reasons, or undefined if no neighbors found.
  */
-function scoreCandidate(
-  userVector: ReadonlyMap<string, number>,
-  candidateId: string,
-  transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
+function scoreCandidate<TUser extends string | number, TItem extends string | number>(
+  userVector: ReadonlyMap<TItem, number>,
+  candidateId: TItem,
+  transpose: ReadonlyMap<TItem, ReadonlyMap<TUser, number>>,
   similarityThreshold: number,
   simFn: SimilarityFunction,
   minIntersectionSize?: number,
   k?: number,
   cache?: SimilarityCache,
   explain?: boolean,
-  sharedItems?: Set<string>
-): { score: number; reasons?: RecommendationReason[] } | undefined {
+  sharedItems?: Set<TItem>
+): { score: number; reasons?: GenericRecommendationReason<TUser, TItem>[] } | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
   const candidateVector = transpose.get(candidateId);
   if (!candidateVector) return undefined;
 
-  const neighbors: { itemId: string; rating: number; sim: number }[] = [];
+  const neighbors: { itemId: TItem; rating: number; sim: number }[] = [];
 
   const itemsToLoop = sharedItems ?? userVector.keys();
   for (const itemId of itemsToLoop) {
@@ -141,7 +123,7 @@ function scoreCandidate(
 
   const score = weightedSum / similaritySum;
 
-  let reasons: RecommendationReason[] | undefined;
+  let reasons: GenericRecommendationReason<TUser, TItem>[] | undefined;
   if (explain) {
     reasons = neighbors.map(n => ({
       triggerItemId: n.itemId,
@@ -159,19 +141,13 @@ function scoreCandidate(
 
 /**
  * Recommends items for a user vector (pseudo-user profile) using Item-Based Collaborative Filtering.
- *
- * @param matrix The sparse interaction matrix.
- * @param userVector The target user's interaction map.
- * @param options Configurable options for the recommendation process.
- * @param cache Optional similarity cache.
- * @returns An array of ranked recommendation objects.
  */
-export function recommendForUserVector(
-  matrix: SparseMatrix,
-  userVector: ReadonlyMap<string, number>,
-  options: ItemBasedRecommendationOptions = {},
+export function recommendForUserVector<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userVector: ReadonlyMap<TItem, number>,
+  options: ItemBasedRecommendationOptions<TItem> = {},
   cache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   if (userVector.size === 0) return [];
 
   const limit = options.limit ?? 10;
@@ -187,7 +163,7 @@ export function recommendForUserVector(
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
-  const filteredCandidates = new Map<string, Set<string>>();
+  const filteredCandidates = new Map<TItem, Set<TItem>>();
   for (const [candidateId, sharedItems] of candidatesMap.entries()) {
     if (excludeSet && excludeSet.has(candidateId)) continue;
     if (filterFn && !filterFn(candidateId)) continue;
@@ -199,7 +175,7 @@ export function recommendForUserVector(
     filteredCandidates.set(candidateId, sharedItems);
   }
 
-  const recommendations: Recommendation[] = [];
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
 
   for (const [candidateId, sharedItems] of filteredCandidates.entries()) {
     const result = scoreCandidate(
@@ -228,18 +204,13 @@ export function recommendForUserVector(
 
 /**
  * Recommends items for a target user using Item-Based Collaborative Filtering.
- *
- * @param matrix The sparse interaction matrix.
- * @param userId The unique identifier of the target user.
- * @param options Configurable options for the recommendation process.
- * @returns An array of ranked recommendation objects.
  */
-export function recommendForUser(
-  matrix: SparseMatrix,
-  userId: string,
-  options: ItemBasedRecommendationOptions = {},
+export function recommendForUser<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  userId: TUser,
+  options: ItemBasedRecommendationOptions<TItem> = {},
   cache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   const userVector = matrix.getUserVector(userId);
   if (!userVector || userVector.size === 0) return [];
   return recommendForUserVector(matrix, userVector, options, cache);

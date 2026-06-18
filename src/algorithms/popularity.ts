@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation } from "../types/index.js";
+import type { GenericRecommendation } from "../types/index.js";
 import { sortAndLimit } from "../utils/matrix-utils.js";
 
 /**
@@ -10,18 +10,18 @@ import { sortAndLimit } from "../utils/matrix-utils.js";
  * @param options Optional filters for item IDs.
  * @returns An array of ranked recommendation objects.
  */
-export function getMostRated(
-  matrix: SparseMatrix,
+export function getMostRated<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
   limit: number,
   options: {
-    readonly filter?: (itemId: string) => boolean;
-    readonly excludeItemIds?: string[];
+    readonly filter?: (itemId: TItem) => boolean;
+    readonly excludeItemIds?: TItem[];
     readonly explain?: boolean;
     readonly filterCategory?: string;
     readonly filterTags?: string[];
   } = {}
-): Recommendation[] {
-  const recommendations: Recommendation[] = [];
+): GenericRecommendation<TItem, TUser>[] {
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
@@ -50,18 +50,18 @@ export function getMostRated(
  * @param options Optional filters for item IDs.
  * @returns An array of ranked recommendation objects.
  */
-export function getMostViewed(
-  matrix: SparseMatrix,
+export function getMostViewed<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
   limit: number,
   options: {
-    readonly filter?: (itemId: string) => boolean;
-    readonly excludeItemIds?: string[];
+    readonly filter?: (itemId: TItem) => boolean;
+    readonly excludeItemIds?: TItem[];
     readonly explain?: boolean;
     readonly filterCategory?: string;
     readonly filterTags?: string[];
   } = {}
-): Recommendation[] {
-  const recommendations: Recommendation[] = [];
+): GenericRecommendation<TItem, TUser>[] {
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
@@ -90,18 +90,18 @@ export function getMostViewed(
  * @param options Optional filters for item IDs.
  * @returns An array of ranked recommendation objects.
  */
-export function getMostPurchased(
-  matrix: SparseMatrix,
+export function getMostPurchased<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
   limit: number,
   options: {
-    readonly filter?: (itemId: string) => boolean;
-    readonly excludeItemIds?: string[];
+    readonly filter?: (itemId: TItem) => boolean;
+    readonly excludeItemIds?: TItem[];
     readonly explain?: boolean;
     readonly filterCategory?: string;
     readonly filterTags?: string[];
   } = {}
-): Recommendation[] {
-  const recommendations: Recommendation[] = [];
+): GenericRecommendation<TItem, TUser>[] {
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 

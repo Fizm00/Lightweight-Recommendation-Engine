@@ -60,8 +60,8 @@ export {
   intersection_size
 };
 
-let wasmKeysCache = new WeakMap<ReadonlyMap<string, number>, Int32Array>();
-let wasmValsCache = new WeakMap<ReadonlyMap<string, number>, Float64Array>();
+let wasmKeysCache = new WeakMap<ReadonlyMap<number | string, number>, Int32Array>();
+let wasmValsCache = new WeakMap<ReadonlyMap<number | string, number>, Float64Array>();
 
 const stringToIdx = new Map<string, number>();
 
@@ -74,21 +74,27 @@ export function clearWasmGlobalCache(): void {
 /**
  * Invalidates the cached WebAssembly typed arrays for a modified vector.
  */
-export function invalidateVectorCache(v: ReadonlyMap<string, number>): void {
+export function invalidateVectorCache(v: ReadonlyMap<number | string, number>): void {
   wasmKeysCache.delete(v);
   wasmValsCache.delete(v);
 }
 
-function getWasmArrays(v: ReadonlyMap<string, number>): [Int32Array, Float64Array] {
+function getWasmArrays(v: ReadonlyMap<number | string, number>): [Int32Array, Float64Array] {
   let keys = wasmKeysCache.get(v);
   let values = wasmValsCache.get(v);
 
   if (!keys || !values) {
     const entries = Array.from(v.entries()).map(([k, val]) => {
-      let idx = stringToIdx.get(k);
-      if (idx === undefined) {
-        idx = stringToIdx.size;
-        stringToIdx.set(k, idx);
+      let idx: number;
+      if (typeof k === "number") {
+        idx = k;
+      } else {
+        let mapped = stringToIdx.get(k);
+        if (mapped === undefined) {
+          mapped = stringToIdx.size;
+          stringToIdx.set(k, mapped);
+        }
+        idx = mapped;
       }
       return [idx, val] as [number, number];
     });
@@ -111,8 +117,8 @@ function getWasmArrays(v: ReadonlyMap<string, number>): [Int32Array, Float64Arra
  * Converts two sparse vector maps to aligned, sorted Int32Array and Float64Array.
  */
 export function mapToWasmVectors(
-  v1: ReadonlyMap<string, number>,
-  v2: ReadonlyMap<string, number>
+  v1: ReadonlyMap<number | string, number>,
+  v2: ReadonlyMap<number | string, number>
 ): [Int32Array, Float64Array, Int32Array, Float64Array] {
   const [keysA, valuesA] = getWasmArrays(v1);
   const [keysB, valuesB] = getWasmArrays(v2);

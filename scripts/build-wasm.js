@@ -11,7 +11,7 @@ console.log("Building WebAssembly binary using wasm-pack...");
 
 // Dynamically add Cargo bin folder to PATH case-insensitively
 const cargoBin = "C:\\Users\\ACER\\.cargo\\bin";
-const env = { ...process.env };
+const env = { ...process.env, RUSTFLAGS: "-C target-feature=+simd128" };
 const pathKey = Object.keys(env).find(k => k.toLowerCase() === "path") || "PATH";
 if (fs.existsSync(cargoBin)) {
   env[pathKey] = `${cargoBin};${env[pathKey] || ""}`;

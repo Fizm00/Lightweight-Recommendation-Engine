@@ -11,8 +11,8 @@ export interface SimilarityFunction {
    * @returns A similarity score (higher values represent higher similarity).
    */
   (
-    vectorA: ReadonlyMap<string, number>,
-    vectorB: ReadonlyMap<string, number>,
+    vectorA: ReadonlyMap<number | string, number>,
+    vectorB: ReadonlyMap<number | string, number>,
     minIntersectionSize?: number
   ): number;
 }

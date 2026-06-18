@@ -1,5 +1,5 @@
 import { SparseMatrix } from "../core/matrix.js";
-import type { Recommendation, RecommendationReason, SessionRecommendationOptions } from "../types/index.js";
+import type { GenericRecommendation, GenericRecommendationReason, SessionRecommendationOptions } from "../types/index.js";
 import { recommendForUserVector } from "./item-based.js";
 import { recommendContentBasedForVector } from "./content-based.js";
 import type { SimilarityCache } from "../core/cache.js";
@@ -14,11 +14,11 @@ import { ValidationError } from "../errors/index.js";
  * @param options Configurable options for session recommendation.
  * @returns An array of ranked recommendation objects.
  */
-export function recommendSessionTransition(
-  matrix: SparseMatrix,
-  sessionItemIds: string[],
+export function recommendSessionTransition<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  sessionItemIds: TItem[],
   options: SessionRecommendationOptions = {}
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   const limit = options.limit ?? 10;
   const decayFactor = options.decayFactor ?? 0.5;
   const explain = options.explain ?? false;
@@ -27,8 +27,8 @@ export function recommendSessionTransition(
   if (N === 0) return [];
 
   const sessionSet = new Set(sessionItemIds);
-  const candidateScores = new Map<string, number>();
-  const triggerItemsMap = new Map<string, { triggerItemId: string; weight: number; probability: number }[]>();
+  const candidateScores = new Map<TItem, number>();
+  const triggerItemsMap = new Map<TItem, { triggerItemId: TItem; weight: number; probability: number }[]>();
 
   // Accumulate transition probabilities from each item in the session
   for (let j = 0; j < N; j++) {
@@ -67,7 +67,7 @@ export function recommendSessionTransition(
     }
   }
 
-  const recommendations: Recommendation[] = [];
+  const recommendations: GenericRecommendation<TItem, TUser>[] = [];
 
   for (const [candidateId, score] of candidateScores.entries()) {
     // 1. Exclude items already in the session
@@ -86,14 +86,14 @@ export function recommendSessionTransition(
       }
     }
 
-    let reasons: RecommendationReason[] | undefined;
+    let reasons: GenericRecommendationReason<TUser, TItem>[] | undefined;
     if (explain) {
       const triggers = triggerItemsMap.get(candidateId) ?? [];
       triggers.sort((a, b) => (b.weight * b.probability) - (a.weight * a.probability));
       reasons = triggers.map(t => ({
         triggerItemId: t.triggerItemId,
         similarity: t.probability,
-        explanation: `Because it frequently follows item ${t.triggerItemId} in shopping patterns`,
+        explanation: `Because it frequently follows item ${String(t.triggerItemId)} in shopping patterns`,
       }));
     }
 
@@ -117,13 +117,13 @@ export function recommendSessionTransition(
  * @param contentCache Optional cache for content-based similarity.
  * @returns An array of ranked recommendation objects.
  */
-export function recommendSessionSimilarity(
-  matrix: SparseMatrix,
-  sessionItemIds: string[],
+export function recommendSessionSimilarity<TUser extends string | number = string, TItem extends string | number = string>(
+  matrix: SparseMatrix<TUser, TItem>,
+  sessionItemIds: TItem[],
   options: SessionRecommendationOptions = {},
   itemCache?: SimilarityCache,
   contentCache?: SimilarityCache
-): Recommendation[] {
+): GenericRecommendation<TItem, TUser>[] {
   const N = sessionItemIds.length;
   if (N === 0) return [];
 
@@ -131,7 +131,7 @@ export function recommendSessionSimilarity(
   const similarityStrategy = options.similarityStrategy ?? "item-based";
 
   // Build a pseudo-user profile based on the session items with decayed weights as ratings
-  const userVector = new Map<string, number>();
+  const userVector = new Map<TItem, number>();
   for (let i = 0; i < N; i++) {
     const itemId = sessionItemIds[i];
     if (itemId === undefined) continue;
@@ -140,7 +140,7 @@ export function recommendSessionSimilarity(
     userVector.set(itemId, Math.max(existingWeight, weight));
   }
 
-  let recommendations: Recommendation[];
+  let recommendations: GenericRecommendation<TItem, TUser>[];
 
   if (similarityStrategy === "content-based") {
     const cbOptions: any = { excludeInteracted: true };
@@ -183,7 +183,7 @@ export function recommendSessionSimilarity(
       if (rec.reasons) {
         const reasons = rec.reasons.map(reason => ({
           ...reason,
-          explanation: `Because it is similar to item ${reason.triggerItemId} in your current session`,
+          explanation: `Because it is similar to item ${String(reason.triggerItemId)} in your current session`,
         }));
         return { ...rec, reasons };
       }

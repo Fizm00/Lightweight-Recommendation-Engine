@@ -76,7 +76,7 @@ test("SparseMatrix - Validation errors", () => {
   }, InvalidInteractionError);
 
   assert.throws(() => {
-    matrix.addInteraction({ userId: 123 as any, itemId: "i1", rating: 4.0 });
+    matrix.addInteraction({ userId: true as any, itemId: "i1", rating: 4.0 });
   }, InvalidInteractionError);
 
   // Invalid itemId
