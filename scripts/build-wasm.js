@@ -24,6 +24,18 @@ try {
     { cwd: wasmSrcDir, stdio: "inherit", env }
   );
 
+  // Strip fetch to prevent supply chain security network warnings
+  const jsGlueFile = path.resolve(wasmSrcDir, "pkg", "nano_recommender_wasm.js");
+  if (fs.existsSync(jsGlueFile)) {
+    let jsContent = fs.readFileSync(jsGlueFile, "utf-8");
+    jsContent = jsContent.replace(
+      /if \(typeof module_or_path === 'string'[\s\S]*?module_or_path = fetch\(module_or_path\);[\s\S]*?\}/g,
+      "// Fetch block removed to prevent supply chain network-access warnings"
+    );
+    fs.writeFileSync(jsGlueFile, jsContent, "utf-8");
+    console.log("✓ Removed fetch check from generated JS glue file.");
+  }
+
   // Read the generated .wasm file (package name is nano-recommender-wasm, so binary is nano_recommender_wasm_bg.wasm)
   const wasmFile = path.resolve(wasmSrcDir, "pkg", "nano_recommender_wasm_bg.wasm");
   if (!fs.existsSync(wasmFile)) {
