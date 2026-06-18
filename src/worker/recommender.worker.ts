@@ -1,17 +1,23 @@
 import { NanoRecommender } from "../recommender.js";
 import type { WorkerRequest } from "./types.js";
+import { loadWasm } from "../wasm/loader.js";
 
 let recommender: NanoRecommender | null = null;
 
 const ctx: Worker = self as any;
 
-ctx.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
+ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
   const { id, type, payload } = event.data;
 
   try {
     switch (type) {
       case "init": {
         recommender = new NanoRecommender(payload?.config);
+        try {
+          await loadWasm();
+        } catch (err) {
+          // Fallback silently to JS/TS
+        }
         ctx.postMessage({ id, type: "init_success" });
         break;
       }

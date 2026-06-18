@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-06-18
+
+### Added
+- **WebAssembly (Wasm) Backend**: Introduced a high-performance WebAssembly backend compiled from Rust using `wasm-bindgen` to accelerate vector similarity calculations (Cosine Similarity, Jaccard Similarity, and Pearson Correlation) on large-scale datasets.
+  - Zero-dependency Base64 inline architecture: Wasm binary is embedded directly into the codebase (`src/wasm/wasm-binary.ts`) for cross-environment compatibility (Node.js and browser) without requiring file system access or external asset loader configurations.
+  - Automatic background loading: Instantiating `NanoRecommender` automatically loads Wasm in the background, falling back to pure JavaScript/TypeScript calculations dynamically if WebAssembly is loading or unsupported.
+  - Web Worker support: Web workers automatically await Wasm compilation before processing queries to ensure offloaded computations are fully accelerated.
+  - Exported `loadWasm` and `isWasmLoaded` helper utilities to let consumers manually pre-load and check WebAssembly compilation status.
+
 ## [1.10.0] - 2026-06-18
 
 ### Added

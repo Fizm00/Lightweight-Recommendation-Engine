@@ -31,6 +31,7 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Packaging Support](#packaging-support)
+- [WebAssembly (Wasm) Acceleration](#webassembly-wasm-acceleration)
 - [Recommendation Strategies](#recommendation-strategies)
   - [Item-Based Collaborative Filtering](#1-item-based-collaborative-filtering-default)
   - [User-Based Collaborative Filtering](#2-user-based-collaborative-filtering)
@@ -73,6 +74,7 @@ It is designed for use-cases requiring rapid collaborative filtering and fallbac
 
 | Feature                                     | Supported | Description                                                    |
 | :------------------------------------------ | :-------: | :------------------------------------------------------------- |
+| **WebAssembly Acceleration**                |    Yes    | Accelerates vector math calculations (Cosine, Jaccard, Pearson) using Rust |
 | **Item-Based Collaborative Filtering**      |    Yes    | Recommends items based on item-item similarity matrices        |
 | **User-Based Collaborative Filtering**      |    Yes    | Recommends items based on user-user similarity matrices        |
 | **K-Nearest Neighbors (KNN) Limit**         |    Yes    | Limits calculations to top K nearest neighbors for performance |
@@ -161,6 +163,28 @@ import { NanoRecommender, cosineSimilarity, pearsonCorrelation } from "@fizm/nan
 
 ```javascript
 const { NanoRecommender, cosineSimilarity, pearsonCorrelation } = require("@fizm/nano-recommender");
+```
+
+---
+
+## WebAssembly (Wasm) Acceleration
+
+The library contains a high-performance WebAssembly backend compiled from Rust using `wasm-bindgen`. It accelerates vector mathematics calculations (Cosine Similarity, Jaccard Similarity, and Pearson Correlation) on large-scale datasets while maintaining zero runtime dependencies.
+
+### Features
+- **Zero-Dependency base64 Inlining**: The Wasm binary is encoded as a Base64 string and embedded directly inside the code (`wasm-binary.ts`). This allows it to run out of the box in both Node.js and browser environments without needing file system reads or network requests.
+- **Automatic Loading**: Instantiating `NanoRecommender` automatically triggers asynchronous loading of the Wasm module in the background. If the module is not yet loaded or if the environment doesn't support WebAssembly, the engine silently falls back to pure JavaScript/TypeScript calculations.
+- **Web Worker Compatibility**: The Wasm module is automatically pre-loaded when using the Web Worker API, providing asynchronous multithreaded recommendation queries fully accelerated by WebAssembly.
+
+### Manual Pre-loading (Optional)
+If you want to ensure WebAssembly is loaded and compiled before running any calculations, you can call the `loadWasm` helper:
+
+```typescript
+import { loadWasm, isWasmLoaded } from "@fizm/nano-recommender";
+
+// Pre-load and compile WebAssembly
+await loadWasm();
+console.log("Is WebAssembly Active:", isWasmLoaded()); // true
 ```
 
 ---
@@ -498,17 +522,17 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 
 | Scale      |  Users  | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
 | :--------- | :-----: | :---: | :----------: | :-------: | :-----------------: | :-----------------: | :-----------------: |
-| **Small**  |  1,000  |  100  |    10,000    |  5.17 ms  |      1,933,712      |       2.12 MB       |       2.14 MB       |
-| **Medium** | 10,000  | 1,000 |   100,000    | 41.81 ms  |      2,391,641      |      20.10 MB       |      158.90 MB      |
-| **Large**  | 100,000 | 5,000 |  1,000,000   | 708.87 ms |      1,410,706      |      200.68 MB      |     1,508.78 MB     |
+| **Small**  |  1,000  |  100  |    10,000    |  5.85 ms  |      1,709,636      |       4.41 MB       |       2.18 MB       |
+| **Medium** | 10,000  | 1,000 |   100,000    | 51.50 ms  |      1,941,725      |      20.12 MB       |      158.87 MB      |
+| **Large**  | 100,000 | 5,000 |  1,000,000   | 856.45 ms |      1,167,605      |      200.77 MB      |     1,511.26 MB     |
 
 ### Recommendation Latency (Item-Based)
 
 | Scale      | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Speedup Factor |
 | :--------- | :------------: | :------------: | :-----------: | :-----------: | :------------: |
-| **Small**  |    0.80 ms     |    2.49 ms     |    0.55 ms    |    0.79 ms    |      1.5x      |
-| **Medium** |    28.60 ms    |    53.69 ms    |    6.70 ms    |    7.61 ms    |      4.3x      |
-| **Large**  |   539.49 ms    |   632.14 ms    |   54.23 ms    |   68.19 ms    |      9.9x      |
+| **Small**  |    1.06 ms     |    3.37 ms     |    0.60 ms    |    0.89 ms    |      1.8x      |
+| **Medium** |    38.02 ms    |    67.40 ms    |    8.27 ms    |   16.25 ms    |      4.6x      |
+| **Large**  |   599.78 ms    |   741.83 ms    |   95.83 ms    |   83.11 ms    |      6.3x      |
 
 ---
 

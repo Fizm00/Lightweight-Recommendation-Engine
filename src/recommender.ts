@@ -17,6 +17,7 @@ import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popu
 import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
 import { sortAndLimit } from "./utils/matrix-utils.js";
+import { loadWasm } from "./wasm/loader.js";
 
 
 /**
@@ -237,6 +238,9 @@ export class NanoRecommender {
     this.userCache = new SimilarityCache(maxCacheSize);
     this.contentCache = new SimilarityCache(maxCacheSize);
 
+    loadWasm().catch(() => {
+      // Fallback silently
+    });
   }
 
   /**

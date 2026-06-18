@@ -1,5 +1,6 @@
 import { intersectionSize } from "./math.js";
 import type { SimilarityFunction } from "./similarity.js";
+import { isWasmLoaded, pearson_correlation, mapToWasmVectors } from "../wasm/loader.js";
 
 /**
  * Calculates the Pearson Correlation Coefficient between two sparse vectors.
@@ -16,6 +17,15 @@ import type { SimilarityFunction } from "./similarity.js";
  * @returns The Pearson Correlation coefficient.
  */
 export const pearsonCorrelation: SimilarityFunction = (vectorA, vectorB, minIntersectionSize) => {
+  if (isWasmLoaded()) {
+    try {
+      const [keysA, valuesA, keysB, valuesB] = mapToWasmVectors(vectorA, vectorB);
+      return pearson_correlation(keysA, valuesA, keysB, valuesB, minIntersectionSize ?? 1);
+    } catch (err) {
+      // Fallback silently to JS/TS
+    }
+  }
+
   if (vectorA.size === 0 || vectorB.size === 0) {
     return 0.0;
   }

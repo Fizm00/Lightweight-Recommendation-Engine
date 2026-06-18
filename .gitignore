@@ -4,3 +4,6 @@ dist/
 temp-build/
 .agents/
 RELEASE_CHECKLIST.md
+src/wasm/target/
+src/wasm/pkg/
+*.wasm
