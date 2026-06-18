@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-06-18
+
+### Added
+- **Web Worker Support**: Introduced asynchronous background processing via `NanoRecommenderWorker` to handle intensive collaborative filtering calculations on a separate thread, keeping the main browser rendering thread completely responsive (60 FPS).
+  - Added compiled Web Worker bundle output `dist/recommender.worker.js`.
+  - Added wrapper class `NanoRecommenderWorker` implementing Promise-based versions of the core recommendation APIs.
+  - Implemented structured protocol communication with request IDs to handle concurrent asynchronous calls.
+  - Added safety warnings and handled data serialization requirements for structured clone algorithms (e.g. filter callbacks warning).
+
 ## [1.9.0] - 2026-06-17
 
 ### Added

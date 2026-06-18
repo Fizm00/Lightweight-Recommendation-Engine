@@ -43,6 +43,7 @@
   - [Hybrid Recommendation Strategy](#9-hybrid-recommendation-strategy)
   - [Explainable Recommendations](#10-explainable-recommendations)
   - [Session-Based Recommendations](#11-session-based-recommendations)
+- [Web Worker Support](#web-worker-support)
 - [Offline Evaluation Suite](#offline-evaluation-suite)
 - [Performance](#performance)
 - [API Reference](#api-reference)
@@ -395,6 +396,49 @@ const recs = recommender.recommend("user_id", {
 });
 ```
 
+## Web Worker Support
+
+For browser environments processing larger datasets (e.g. 50,000+ interactions), calling recommendation queries directly on the main thread might block the UI, dropping frames. To keep your UI running at a smooth 60 FPS, the library offers asynchronous background processing using **Web Workers**.
+
+The class `NanoRecommenderWorker` acts as an asynchronous facade to the Web Worker. It exposes the same API as `NanoRecommender`, but every method returns a `Promise`.
+
+### Usage
+
+1. **Instantiation**:
+   Pass a new `Worker` pointing to the library's compiled worker script (located at `@fizm/nano-recommender/dist/recommender.worker.js`):
+
+   ```typescript
+   import { NanoRecommenderWorker } from "@fizm/nano-recommender";
+
+   const recommender = new NanoRecommenderWorker(
+     new Worker(
+       new URL("@fizm/nano-recommender/dist/recommender.worker.js", import.meta.url),
+       { type: "module" }
+     )
+   );
+   ```
+
+2. **Operations**:
+   All operations are executed asynchronously in the background:
+
+   ```typescript
+   // 1. Initialize the engine inside the worker
+   await recommender.init({ defaultStrategy: "item-based" });
+
+   // 2. Load dataset in background
+   await recommender.load(interactions);
+
+   // 3. Query recommendations asynchronously
+   const recs = await recommender.recommend("user_id", { limit: 5 });
+   console.log(recs);
+
+   // 4. Terminate the worker thread when done (optional)
+   recommender.terminate();
+   ```
+
+> [!WARNING]
+   > Because Web Workers communicate via message passing using the structured clone algorithm, custom filter callback functions (`options.filter`) cannot be passed to `NanoRecommenderWorker`. Instead, perform post-filtering of the returned recommendations on the main thread.
+
 ## Offline Evaluation Suite
 
 The library includes a built-in evaluation suite under the `evaluation` namespace, enabling developers to partition interaction datasets and calculate recommendation quality metrics.
@@ -547,6 +591,10 @@ Directly triggers Item-Based Collaborative Filtering. Accepts all filtering opti
 #### `recommendUserBased(userId: string, options?: UserBasedRecommendationOptions): Recommendation[]`
 
 Directly triggers User-Based Collaborative Filtering. Accepts all filtering options (`excludeItemIds`, `filter`).
+
+#### `recommendContentBased(userId: string, options?: ContentBasedRecommendationOptions): Recommendation[]`
+
+Directly triggers Content-Based Filtering based on item metadata categories and tags. Accepts filtering options (`excludeItemIds`, `filter`).
 
 #### `recommendHybrid(userId: string, options?: RecommendationOptions): Recommendation[]`
 

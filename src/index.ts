@@ -11,6 +11,7 @@ export * from "./algorithms/user-based.js";
 export * from "./algorithms/content-based.js";
 export * from "./algorithms/session-based.js";
 export * from "./recommender.js";
+export * from "./worker/recommender-client.js";
 
 export * from "./algorithms/popularity.js";
 export * from "./core/cache.js";
