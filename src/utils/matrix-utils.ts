@@ -10,7 +10,7 @@ import type { GenericRecommendation } from "../types/index.js";
 export function buildTransposeMatrix<TUser extends string | number = string, TItem extends string | number = string>(
   matrix: SparseMatrix<TUser, TItem>
 ): ReadonlyMap<TItem, ReadonlyMap<TUser, number>> {
-  return matrix.getTransposeMatrix();
+  return (matrix as any).getTransposeMatrixRaw ? (matrix as any).getTransposeMatrixRaw() : matrix.getTransposeMatrix();
 }
 
 /**
@@ -105,7 +105,23 @@ export function sortAndLimit<TItem extends string | number = string, TUser exten
     return [];
   }
 
-  const compareRecs = (a: GenericRecommendation<TItem, TUser>, b: GenericRecommendation<TItem, TUser>) => {
+  // If the number of recommendations is small, native sort is faster than MinHeap due to low overhead
+  if (recs.length <= 200 || recs.length <= limit) {
+    const compareRecsDesc = (a: GenericRecommendation<TItem, TUser>, b: GenericRecommendation<TItem, TUser>) => {
+      if (Math.abs(a.score - b.score) > 1e-9) {
+        return b.score - a.score;
+      }
+      const idA = a.itemId;
+      const idB = b.itemId;
+      if (typeof idA === "number" && typeof idB === "number") {
+        return idA - idB;
+      }
+      return String(idA).localeCompare(String(idB));
+    };
+    return recs.sort(compareRecsDesc).slice(0, limit);
+  }
+
+  const compareRecsAsc = (a: GenericRecommendation<TItem, TUser>, b: GenericRecommendation<TItem, TUser>) => {
     if (Math.abs(a.score - b.score) > 1e-9) {
       return a.score - b.score;
     }
@@ -117,7 +133,7 @@ export function sortAndLimit<TItem extends string | number = string, TUser exten
     return String(idB).localeCompare(String(idA));
   };
 
-  const heap = new MinHeap<GenericRecommendation<TItem, TUser>>(compareRecs, limit);
+  const heap = new MinHeap<GenericRecommendation<TItem, TUser>>(compareRecsAsc, limit);
   for (const rec of recs) {
     heap.push(rec);
   }

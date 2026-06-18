@@ -18,6 +18,7 @@ export class SimilarityCache {
   constructor(private readonly maxEntries?: number) {}
 
   private getId(id: string | number): number {
+    if (typeof id === "number") return id;
     const resolved = this.toInternal ? this.toInternal(id) : id;
     if (typeof resolved === "number") return resolved;
     let num = this.idMap.get(resolved);

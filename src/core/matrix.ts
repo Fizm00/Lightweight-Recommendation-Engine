@@ -336,6 +336,9 @@ export class SparseMatrix<
     if (!vector) return undefined;
 
     if (this.useIntegerMapping) {
+      if (typeof userId === "number") {
+        return vector;
+      }
       const self = this;
       return new Proxy(vector, {
         get(target, prop, receiver) {
@@ -627,6 +630,10 @@ export class SparseMatrix<
     return this.transpose;
   }
 
+  public getTransposeMatrixRaw(): Map<any, Map<any, number>> {
+    return this.transpose;
+  }
+
   /**
    * Retrieves transitions from a given itemId.
    *
@@ -642,6 +649,9 @@ export class SparseMatrix<
     if (!transitionsMap) return undefined;
 
     if (this.useIntegerMapping) {
+      if (typeof fromItemId === "number") {
+        return transitionsMap;
+      }
       const self = this;
       return new Proxy(transitionsMap, {
         get(target, prop, receiver) {
