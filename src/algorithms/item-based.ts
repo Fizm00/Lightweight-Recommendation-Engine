@@ -49,8 +49,8 @@ function findCandidateItems(
   userVector: ReadonlyMap<string, number>,
   transpose: ReadonlyMap<string, ReadonlyMap<string, number>>,
   excludeInteracted: boolean
-): Set<string> {
-  const candidates = new Set<string>();
+): Map<string, Set<string>> {
+  const candidates = new Map<string, Set<string>>();
   for (const itemId of userVector.keys()) {
     const userMap = transpose.get(itemId);
     if (!userMap) continue;
@@ -59,7 +59,12 @@ function findCandidateItems(
       if (!otherUserVector) continue;
       for (const candidateId of otherUserVector.keys()) {
         if (!excludeInteracted || !userVector.has(candidateId)) {
-          candidates.add(candidateId);
+          let shared = candidates.get(candidateId);
+          if (!shared) {
+            shared = new Set<string>();
+            candidates.set(candidateId, shared);
+          }
+          shared.add(itemId);
         }
       }
     }
@@ -77,6 +82,7 @@ function findCandidateItems(
  * @param simFn The similarity function to use.
  * @param cache Optional similarity cache.
  * @param explain Whether to include explanation reasons.
+ * @param sharedItems Optional set of items from the user profile that share users with the candidate.
  * @returns The predicted rating score and optional reasons, or undefined if no neighbors found.
  */
 function scoreCandidate(
@@ -88,7 +94,8 @@ function scoreCandidate(
   minIntersectionSize?: number,
   k?: number,
   cache?: SimilarityCache,
-  explain?: boolean
+  explain?: boolean,
+  sharedItems?: Set<string>
 ): { score: number; reasons?: RecommendationReason[] } | undefined {
   let weightedSum = 0;
   let similaritySum = 0;
@@ -97,7 +104,9 @@ function scoreCandidate(
 
   const neighbors: { itemId: string; rating: number; sim: number }[] = [];
 
-  for (const [itemId, rating] of userVector.entries()) {
+  const itemsToLoop = sharedItems ?? userVector.keys();
+  for (const itemId of itemsToLoop) {
+    const rating = userVector.get(itemId)!;
     const itemVector = transpose.get(itemId);
     if (!itemVector) continue;
     let sim = cache?.get(itemId, candidateId);
@@ -148,8 +157,6 @@ function scoreCandidate(
   };
 }
 
-
-
 /**
  * Recommends items for a user vector (pseudo-user profile) using Item-Based Collaborative Filtering.
  *
@@ -175,13 +182,13 @@ export function recommendForUserVector(
   const k = options.k;
 
   const transpose = buildTransposeMatrix(matrix);
-  const candidates = findCandidateItems(matrix, userVector, transpose, exclude);
+  const candidatesMap = findCandidateItems(matrix, userVector, transpose, exclude);
 
   const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds) : null;
   const filterFn = options.filter;
 
-  const filteredCandidates = new Set<string>();
-  for (const candidateId of candidates) {
+  const filteredCandidates = new Map<string, Set<string>>();
+  for (const [candidateId, sharedItems] of candidatesMap.entries()) {
     if (excludeSet && excludeSet.has(candidateId)) continue;
     if (filterFn && !filterFn(candidateId)) continue;
     if (options.filterCategory !== undefined && matrix.getItemCategory(candidateId) !== options.filterCategory) continue;
@@ -189,13 +196,24 @@ export function recommendForUserVector(
       const itemTags = matrix.getItemTags(candidateId);
       if (!itemTags || !options.filterTags.some(t => itemTags.includes(t))) continue;
     }
-    filteredCandidates.add(candidateId);
+    filteredCandidates.set(candidateId, sharedItems);
   }
 
   const recommendations: Recommendation[] = [];
 
-  for (const candidateId of filteredCandidates) {
-    const result = scoreCandidate(userVector, candidateId, transpose, threshold, simFn, minIntersection, k, cache, options.explain);
+  for (const [candidateId, sharedItems] of filteredCandidates.entries()) {
+    const result = scoreCandidate(
+      userVector,
+      candidateId,
+      transpose,
+      threshold,
+      simFn,
+      minIntersection,
+      k,
+      cache,
+      options.explain,
+      sharedItems
+    );
     if (result !== undefined) {
       recommendations.push({
         itemId: candidateId,

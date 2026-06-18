@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { loadWasm, isWasmLoaded, mapToWasmVectors } from "../wasm/loader.js";
+import { loadWasm, isWasmLoaded, mapToWasmVectors, clearWasmGlobalCache } from "../wasm/loader.js";
 import { cosineSimilarity } from "../algorithms/cosine.js";
 import { jaccardSimilarity } from "../algorithms/jaccard.js";
 import { pearsonCorrelation } from "../algorithms/pearson.js";
@@ -13,6 +13,7 @@ test("WASM Backend - loadWasm and initialization", async () => {
 });
 
 test("WASM Backend - mapToWasmVectors alignment and sorting", () => {
+  clearWasmGlobalCache();
   const v1 = new Map([
     ["apple", 1.5],
     ["banana", 2.0],

@@ -1,6 +1,6 @@
 {
   "name": "@fizm/nano-recommender",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Zero-dependency collaborative filtering recommendation engine built for performance",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

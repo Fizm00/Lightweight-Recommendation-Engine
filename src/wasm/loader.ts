@@ -60,6 +60,53 @@ export {
   intersection_size
 };
 
+let wasmKeysCache = new WeakMap<ReadonlyMap<string, number>, Int32Array>();
+let wasmValsCache = new WeakMap<ReadonlyMap<string, number>, Float64Array>();
+
+const stringToIdx = new Map<string, number>();
+
+export function clearWasmGlobalCache(): void {
+  stringToIdx.clear();
+  wasmKeysCache = new WeakMap();
+  wasmValsCache = new WeakMap();
+}
+
+/**
+ * Invalidates the cached WebAssembly typed arrays for a modified vector.
+ */
+export function invalidateVectorCache(v: ReadonlyMap<string, number>): void {
+  wasmKeysCache.delete(v);
+  wasmValsCache.delete(v);
+}
+
+function getWasmArrays(v: ReadonlyMap<string, number>): [Int32Array, Float64Array] {
+  let keys = wasmKeysCache.get(v);
+  let values = wasmValsCache.get(v);
+
+  if (!keys || !values) {
+    const entries = Array.from(v.entries()).map(([k, val]) => {
+      let idx = stringToIdx.get(k);
+      if (idx === undefined) {
+        idx = stringToIdx.size;
+        stringToIdx.set(k, idx);
+      }
+      return [idx, val] as [number, number];
+    });
+    // Sort by integer key (super fast)
+    entries.sort((a, b) => a[0] - b[0]);
+
+    keys = new Int32Array(entries.length);
+    values = new Float64Array(entries.length);
+    for (let i = 0; i < entries.length; i++) {
+      keys[i] = entries[i]![0];
+      values[i] = entries[i]![1];
+    }
+    wasmKeysCache.set(v, keys);
+    wasmValsCache.set(v, values);
+  }
+  return [keys, values];
+}
+
 /**
  * Converts two sparse vector maps to aligned, sorted Int32Array and Float64Array.
  */
@@ -67,58 +114,7 @@ export function mapToWasmVectors(
   v1: ReadonlyMap<string, number>,
   v2: ReadonlyMap<string, number>
 ): [Int32Array, Float64Array, Int32Array, Float64Array] {
-  const keysA = new Int32Array(v1.size);
-  const valuesA = new Float64Array(v1.size);
-  const keysB = new Int32Array(v2.size);
-  const valuesB = new Float64Array(v2.size);
-
-  const entriesA = Array.from(v1.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  const entriesB = Array.from(v2.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-
-  let idxA = 0;
-  let idxB = 0;
-  let currentIdx = 0;
-
-  while (idxA < entriesA.length && idxB < entriesB.length) {
-    const entryA = entriesA[idxA]!;
-    const entryB = entriesB[idxB]!;
-    const keyA = entryA[0];
-    const keyB = entryB[0];
-
-    if (keyA === keyB) {
-      keysA[idxA] = currentIdx;
-      valuesA[idxA] = entryA[1];
-      keysB[idxB] = currentIdx;
-      valuesB[idxB] = entryB[1];
-      idxA++;
-      idxB++;
-    } else if (keyA < keyB) {
-      keysA[idxA] = currentIdx;
-      valuesA[idxA] = entryA[1];
-      idxA++;
-    } else {
-      keysB[idxB] = currentIdx;
-      valuesB[idxB] = entryB[1];
-      idxB++;
-    }
-    currentIdx++;
-  }
-
-  while (idxA < entriesA.length) {
-    const entryA = entriesA[idxA]!;
-    keysA[idxA] = currentIdx;
-    valuesA[idxA] = entryA[1];
-    idxA++;
-    currentIdx++;
-  }
-
-  while (idxB < entriesB.length) {
-    const entryB = entriesB[idxB]!;
-    keysB[idxB] = currentIdx;
-    valuesB[idxB] = entryB[1];
-    idxB++;
-    currentIdx++;
-  }
-
+  const [keysA, valuesA] = getWasmArrays(v1);
+  const [keysB, valuesB] = getWasmArrays(v2);
   return [keysA, valuesA, keysB, valuesB];
 }

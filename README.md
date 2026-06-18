@@ -522,17 +522,17 @@ The benchmark suite was run on synthetic datasets generated with 10 interactions
 
 | Scale      |  Users  | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
 | :--------- | :-----: | :---: | :----------: | :-------: | :-----------------: | :-----------------: | :-----------------: |
-| **Small**  |  1,000  |  100  |    10,000    |  5.85 ms  |      1,709,636      |       4.41 MB       |       2.18 MB       |
-| **Medium** | 10,000  | 1,000 |   100,000    | 51.50 ms  |      1,941,725      |      20.12 MB       |      158.87 MB      |
-| **Large**  | 100,000 | 5,000 |  1,000,000   | 856.45 ms |      1,167,605      |      200.77 MB      |     1,511.26 MB     |
+| **Small**  |  1,000  |  100  |    10,000    |  9.32 ms  |      1,073,238      |       2.14 MB       |       0.79 MB       |
+| **Medium** | 10,000  | 1,000 |   100,000    | 100.55 ms |       994,525       |      20.10 MB       |      31.07 MB       |
+| **Large**  | 100,000 | 5,000 |  1,000,000   | 1201.75 ms|       832,117       |      200.76 MB      |      165.99 MB      |
 
 ### Recommendation Latency (Item-Based)
 
 | Scale      | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Speedup Factor |
 | :--------- | :------------: | :------------: | :-----------: | :-----------: | :------------: |
-| **Small**  |    1.06 ms     |    3.37 ms     |    0.60 ms    |    0.89 ms    |      1.8x      |
-| **Medium** |    38.02 ms    |    67.40 ms    |    8.27 ms    |   16.25 ms    |      4.6x      |
-| **Large**  |   599.78 ms    |   741.83 ms    |   95.83 ms    |   83.11 ms    |      6.3x      |
+| **Small**  |    1.46 ms     |    5.49 ms     |    0.83 ms    |    1.17 ms    |      1.8x      |
+| **Medium** |    33.00 ms    |    60.76 ms    |    5.49 ms    |    6.72 ms    |      6.0x      |
+| **Large**  |   422.50 ms    |   586.07 ms    |   18.53 ms    |   23.41 ms    |     22.8x      |
 
 ---
 

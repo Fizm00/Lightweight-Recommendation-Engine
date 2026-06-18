@@ -1,5 +1,6 @@
 import type { Interaction, SparseMatrixStorage, SerializedMatrixState, SerializedTransitionState } from "../types/index.js";
 import { InvalidInteractionError, ValidationError } from "../errors/index.js";
+import { clearWasmGlobalCache, invalidateVectorCache } from "../wasm/loader.js";
 
 /**
  * A performance-oriented, in-memory representation of a sparse interaction matrix.
@@ -35,6 +36,8 @@ export class SparseMatrix {
     if (!userVector) {
       userVector = new Map<string, number>();
       this.storage.set(userId, userVector);
+    } else {
+      invalidateVectorCache(userVector);
     }
 
     const isNew = !userVector.has(itemId);
@@ -51,6 +54,8 @@ export class SparseMatrix {
     if (!itemVector) {
       itemVector = new Map<string, number>();
       this.transpose.set(itemId, itemVector);
+    } else {
+      invalidateVectorCache(itemVector);
     }
     itemVector.set(userId, rating);
 
@@ -300,6 +305,7 @@ export class SparseMatrix {
     this.itemTags.clear();
     this.transitions.clear();
     this.userHistory.clear();
+    clearWasmGlobalCache();
   }
 
   /**
