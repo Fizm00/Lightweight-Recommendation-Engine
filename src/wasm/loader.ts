@@ -9,6 +9,7 @@ import initWasm, {
 import { WASM_BASE64 } from "./wasm-binary.js";
 
 let isLoaded = false;
+let isEnabled = true;
 
 function decodeBase64(base64: string): Uint8Array {
   if (typeof Buffer !== "undefined") {
@@ -48,7 +49,14 @@ export async function loadWasm(): Promise<boolean> {
  * Returns true if the WebAssembly module has been successfully loaded.
  */
 export function isWasmLoaded(): boolean {
-  return isLoaded;
+  return isLoaded && isEnabled;
+}
+
+/**
+ * Dynamically enables or disables WebAssembly acceleration.
+ */
+export function setWasmEnabled(enabled: boolean): void {
+  isEnabled = enabled;
 }
 
 export {

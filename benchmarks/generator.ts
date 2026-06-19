@@ -44,7 +44,10 @@ function generateUserInteractions(
     const rand = lcg.next();
     const type = rand < 0.5 ? "rate" : rand < 0.8 ? "view" : "purchase";
     const rating = Math.round((lcg.next() * 4 + 1) * 2) / 2;
-    return { userId, itemId: `i_${itemIdx}`, rating, type };
+    // Generate deterministic metadata for content-based strategies
+    const itemCategory = `cat_${itemIdx % 10}`;
+    const itemTags = [`tag_${itemIdx % 50}`, `tag_${(itemIdx + 1) % 50}`];
+    return { userId, itemId: `i_${itemIdx}`, rating, type, itemCategory, itemTags };
   });
 }
 
@@ -53,18 +56,32 @@ function generateUserInteractions(
  *
  * @param numUsers Number of users.
  * @param numItems Number of items.
- * @param interactionsPerUser Number of interactions per user.
+ * @param interactionsPerUser Baseline number of interactions per user.
+ * @param densityMode Density distribution mode ("uniform" or "variable").
  * @returns An array of synthetic interaction events.
  */
 export function generateSyntheticData(
   numUsers: number,
   numItems: number,
-  interactionsPerUser: number
+  interactionsPerUser: number,
+  densityMode: "uniform" | "variable" = "uniform"
 ): Interaction[] {
   const lcg = new LCG();
   const interactions: Interaction[] = [];
   for (let u = 0; u < numUsers; u++) {
-    interactions.push(...generateUserInteractions(`u_${u}`, numItems, interactionsPerUser, lcg));
+    let count = interactionsPerUser;
+    if (densityMode === "variable") {
+      const r = lcg.next();
+      if (r < 0.80) {
+        count = Math.max(1, Math.floor(interactionsPerUser * 0.5));
+      } else if (r < 0.95) {
+        count = interactionsPerUser * 2;
+      } else {
+        count = interactionsPerUser * 10;
+      }
+      count = Math.min(count, numItems);
+    }
+    interactions.push(...generateUserInteractions(`u_${u}`, numItems, count, lcg));
   }
   return interactions;
 }
