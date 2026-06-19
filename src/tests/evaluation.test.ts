@@ -2,19 +2,25 @@ import test from "node:test";
 import assert from "node:assert";
 import { NanoRecommender } from "../recommender.js";
 import { ValidationError } from "../errors/index.js";
+import { SparseMatrix } from "../core/matrix.js";
 import {
   splitRandom,
   splitTemporal,
   splitUserHoldout,
-} from "../evaluation/splitter.js";
-import {
   calculatePrecision,
   calculateRecall,
   calculateNDCG,
   calculateRMSE,
   calculateMAE,
-} from "../evaluation/metrics.js";
-import { evaluate } from "../evaluation/runner.js";
+  calculateMAP,
+  calculateMRR,
+  calculateDiversity,
+  calculateNovelty,
+  calculateSerendipity,
+  evaluate,
+  compareStrategies,
+  tune,
+} from "../evaluation/index.js";
 
 test("Dataset Splitter - splitRandom", () => {
   const dataset = [
@@ -175,4 +181,130 @@ test("Evaluation Runner - evaluate workflow", () => {
   assert.throws(() => {
     evaluate(recommender, trainData, testData, { topK: 0 });
   }, RangeError);
+});
+
+test("Evaluation Metrics Math - Advanced Ranking & Content Metrics", () => {
+  const recommended = ["i1", "i2", "i3", "i4"];
+  const testSet = new Set(["i2", "i4"]); // relevant items
+
+  // MAP@4 calculation:
+  // i=0 ("i1"): not relevant.
+  // i=1 ("i2"): relevant. hits = 1. precision at 2 = 1/2 = 0.5.
+  // i=2 ("i3"): not relevant.
+  // i=3 ("i4"): relevant. hits = 2. precision at 4 = 2/4 = 0.5.
+  // sumPrecision = 0.5 + 0.5 = 1.0.
+  // denominator = Math.min(4, 2) = 2.
+  // MAP = 1.0 / 2 = 0.5.
+  assert.strictEqual(calculateMAP(recommended, testSet, 4), 0.5);
+
+  // MRR@4 calculation:
+  // First relevant hit is "i2" at index 1 (rank 2).
+  // MRR = 1/2 = 0.5.
+  assert.strictEqual(calculateMRR(recommended, testSet, 4), 0.5);
+
+  // Let's create a SparseMatrix to test Diversity, Novelty, and Serendipity.
+  const matrix = new SparseMatrix<any, any>({ useIntegerMapping: true });
+  // Add interactions:
+  // Item "i1" has 2 interactions (u1, u2)
+  // Item "i2" has 1 interaction (u1)
+  // Item "i3" has 1 interaction (u2)
+  // Item "i4" has 1 interaction (u3)
+  matrix.addInteraction({ userId: "u1", itemId: "i1", rating: 5 });
+  matrix.addInteraction({ userId: "u1", itemId: "i2", rating: 4 });
+  matrix.addInteraction({ userId: "u2", itemId: "i1", rating: 4 });
+  matrix.addInteraction({ userId: "u2", itemId: "i3", rating: 3 });
+  matrix.addInteraction({ userId: "u3", itemId: "i4", rating: 5 });
+
+  // Check Novelty@4:
+  // total interactions = 5
+  // ratingsCountMap: i1 -> 2, i2 -> 1, i3 -> 1, i4 -> 1
+  // p(i1) = 2/5 = 0.4. -log2(0.4) = 1.321928
+  // p(i2) = 1/5 = 0.2. -log2(0.2) = 2.321928
+  // p(i3) = 1/5 = 0.2. -log2(0.2) = 2.321928
+  // p(i4) = 1/5 = 0.2. -log2(0.2) = 2.321928
+  // Novelty = (1.321928 + 2.321928 * 3) / 4 = (1.321928 + 6.965784) / 4 = 8.287712 / 4 = 2.071928
+  const novelty = calculateNovelty(recommended, matrix, 4);
+  assert.ok(Math.abs(novelty - 2.071928) < 1e-5);
+
+  // Check Diversity@2: recommended = ["i1", "i2"]
+  // Cosine similarity between i1 and i2:
+  // uVecA (i1): u1 -> 5, u2 -> 4. normA = sqrt(25 + 16) = sqrt(41) = 6.403124
+  // uVecB (i2): u1 -> 4. normB = sqrt(16) = 4
+  // dotProduct = 5 * 4 = 20
+  // similarity = 20 / (6.403124 * 4) = 20 / 25.612496 = 0.7808688
+  // dissimilarity = 1 - 0.7808688 = 0.219131
+  const diversity = calculateDiversity(recommended, matrix, 2);
+  assert.ok(Math.abs(diversity - 0.219131) < 1e-5);
+
+  // Check Serendipity@4: recommended = ["i1", "i2", "i3", "i4"], testSet = {"i2", "i4"}
+  // ratingsCountMap maxCount = 2 (for i1)
+  // For relevant items:
+  // i2: count = 1. popularity = 1/2 = 0.5. serendipity contribution = max(0, 1 - 0.5) = 0.5
+  // i4: count = 1. popularity = 1/2 = 0.5. serendipity contribution = max(0, 1 - 0.5) = 0.5
+  // Total Serendipity = (0.5 + 0.5) / 4 = 0.25
+  const serendipity = calculateSerendipity(recommended, testSet, matrix, 4);
+  assert.ok(Math.abs(serendipity - 0.25) < 1e-5);
+});
+
+test("Evaluation Runner - compareStrategies", () => {
+  const recommender = new NanoRecommender({
+    defaultStrategy: "item-based",
+  });
+
+  const trainData = [
+    { userId: "u1", itemId: "i1", rating: 5.0 },
+    { userId: "u1", itemId: "i2", rating: 4.0 },
+    { userId: "u2", itemId: "i1", rating: 5.0 },
+    { userId: "u2", itemId: "i3", rating: 3.0 },
+  ];
+
+  const testData = [
+    { userId: "u1", itemId: "i3", rating: 5.0 },
+  ];
+
+  const compareResult = compareStrategies(recommender, trainData, testData, ["item-based", "user-based"], { topK: 2 });
+  
+  assert.ok("item-based" in compareResult);
+  assert.ok("user-based" in compareResult);
+  
+  const itemResult = compareResult["item-based"]!;
+  assert.ok(typeof itemResult.precision === "number");
+  assert.ok(typeof itemResult.map === "number");
+  assert.ok(typeof itemResult.diversity === "number");
+});
+
+test("Evaluation Tuner - tune workflow", () => {
+  const recommender = new NanoRecommender({
+    defaultStrategy: "item-based",
+  });
+
+  const trainData = [
+    { userId: "u1", itemId: "i1", rating: 5.0 },
+    { userId: "u1", itemId: "i2", rating: 4.0 },
+    { userId: "u2", itemId: "i1", rating: 5.0 },
+    { userId: "u2", itemId: "i3", rating: 3.0 },
+  ];
+
+  const testData = [
+    { userId: "u1", itemId: "i3", rating: 5.0 },
+  ];
+
+  const parameterGrid = {
+    similarityThreshold: [0.0, 0.5],
+    strategy: ["item-based", "user-based"] as ("item-based" | "user-based")[],
+  };
+
+  const tuneResult = tune(recommender, trainData, testData, parameterGrid, {
+    metric: "ndcg",
+    topK: 2,
+  });
+
+  assert.ok(tuneResult.trials.length === 4);
+  assert.ok(tuneResult.bestParameters !== null);
+  assert.ok(typeof tuneResult.bestScore === "number" || tuneResult.bestScore === null);
+  
+  // Verify bestParameters keys
+  const bestParams = tuneResult.bestParameters!;
+  assert.ok("similarityThreshold" in bestParams);
+  assert.ok("strategy" in bestParams);
 });

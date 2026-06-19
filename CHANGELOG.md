@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-06-19
+
+### Added
+- **Developer Experience (DX) & Builder API**:
+  - Introduced `RecommendationQueryBuilder` and `SessionRecommendationQueryBuilder` to construct recommendation queries fluently via method chaining (`recommender.query(userId)` and `recommender.querySession(sessionItemIds)`).
+  - Added static creator `NanoRecommender.fromPreset()` and support for domain-specific configuration presets (`"ecommerce"` and `"media"`) directly in the constructor.
+  - Added strategy auto-routing (`"auto"`), dynamically choosing the best recommendation strategy based on the user's interaction count and category diversity.
+  - Added method `recommender.metrics()` to track operational stats including overall and individual cache hit rates (`cacheHitRate`, `cacheDetails`) and memory footprint (`memoryUsage`).
+- **Advanced Accuracy Metrics & Tuning**:
+  - Added new ranking and diversity metrics to the `evaluation` module: `calculateMAP` (MAP@K), `calculateMRR` (MRR@K), `calculateDiversity` (Intra-List Diversity), `calculateNovelty` (Self-Information), and `calculateSerendipity` (unexpected relevant recommendations).
+  - Added `compareStrategies()` utility to compare the performance of multiple strategies on the same train/test split.
+  - Added `tune()` utility to perform grid search parameter tuning and automatically discover the best configuration for a target evaluation metric.
+
 ## [2.0.2] - 2026-06-19
 
 ### Optimized

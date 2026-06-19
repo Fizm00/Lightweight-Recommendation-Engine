@@ -32,7 +32,7 @@ import { loadWasm } from "./wasm/loader.js";
  */
 export interface NanoRecommenderConfig {
   /** The default strategy to use in the recommend method. Defaults to 'item-based'. */
-  readonly defaultStrategy?: "item-based" | "user-based" | "hybrid" | "content-based";
+  readonly defaultStrategy?: "item-based" | "user-based" | "hybrid" | "content-based" | "auto";
   /** The default similarity threshold. Defaults to 0.0. */
   readonly defaultSimilarityThreshold?: number;
   /** The default fallback strategy for cold start users. Defaults to 'most-rated'. */
@@ -73,8 +73,8 @@ export interface RecommenderStats {
  * Options for the recommendation method.
  */
 export interface RecommendationOptions extends ItemBasedRecommendationOptions, UserBasedRecommendationOptions, ContentBasedRecommendationOptions {
-  /** The recommendation strategy to use: 'item-based' | 'user-based' | 'hybrid' | 'content-based'. */
-  readonly strategy?: "item-based" | "user-based" | "hybrid" | "content-based";
+  /** The recommendation strategy to use: 'item-based' | 'user-based' | 'hybrid' | 'content-based' | 'auto'. */
+  readonly strategy?: "item-based" | "user-based" | "hybrid" | "content-based" | "auto";
   /** Fallback strategy for cold start users. Defaults to constructor default fallback strategy. */
   readonly fallbackStrategy?: "most-rated" | "most-viewed" | "most-purchased" | "none";
   /** The weighting parameter alpha for hybrid strategy on this query. Optional. */
@@ -97,6 +97,39 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
 
 /**
  * The unified public entrypoint facade for the nano-recommender library.
+/**
+ * Standard configurations presets for specific business domains.
+ */
+export const PRESETS = {
+  ecommerce: {
+    defaultStrategy: "hybrid" as const,
+    defaultFallbackStrategy: "most-purchased" as const,
+    defaultSimilarityThreshold: 0.1,
+    defaultMinIntersectionSize: 2,
+    defaultK: 50,
+    defaultHybridAlpha: 0.7,
+    interactionWeights: {
+      purchase: 3.0,
+      cart: 2.0,
+      view: 1.0,
+    }
+  },
+  media: {
+    defaultStrategy: "item-based" as const,
+    defaultFallbackStrategy: "most-viewed" as const,
+    defaultSimilarityThreshold: 0.05,
+    defaultMinIntersectionSize: 1,
+    defaultK: 100,
+    decayHalfLifeDays: 30,
+    interactionWeights: {
+      watch: 2.0,
+      click: 1.0,
+    }
+  }
+};
+
+/**
+ * The unified public entrypoint facade for the nano-recommender library.
  *
  * It manages an internal sparse interaction matrix and exposes simple APIs
  * for loading datasets and running recommendation queries without exposing internals.
@@ -107,7 +140,7 @@ export class NanoRecommender {
   private readonly itemCache: SimilarityCache;
   private readonly userCache: SimilarityCache;
   private readonly contentCache: SimilarityCache;
-  private readonly defaultStrategy: "item-based" | "user-based" | "hybrid" | "content-based";
+  private readonly defaultStrategy: "item-based" | "user-based" | "hybrid" | "content-based" | "auto";
   private readonly defaultThreshold: number;
   private readonly defaultMinIntersectionSize: number;
   private readonly defaultK: number | undefined;
@@ -125,83 +158,94 @@ export class NanoRecommender {
   /**
    * Constructs a new NanoRecommender instance.
    *
-   * @param config Optional engine configurations.
+   * @param config Optional engine configurations or preset name.
    */
-  constructor(config: NanoRecommenderConfig = {}) {
-    this.defaultStrategy = config.defaultStrategy ?? "item-based";
-    this.defaultThreshold = config.defaultSimilarityThreshold ?? 0.0;
-    this.defaultFallback = config.defaultFallbackStrategy ?? "most-rated";
+  constructor(config: NanoRecommenderConfig | "ecommerce" | "media" = {}) {
+    let finalConfig: NanoRecommenderConfig = {};
+    if (typeof config === "string") {
+      if (config === "ecommerce" || config === "media") {
+        finalConfig = PRESETS[config];
+      } else {
+        throw new ValidationError(`Unknown preset: ${config}`);
+      }
+    } else {
+      finalConfig = config;
+    }
 
-    if (config.defaultExplain !== undefined && typeof config.defaultExplain !== "boolean") {
+    this.defaultStrategy = finalConfig.defaultStrategy ?? "item-based";
+    this.defaultThreshold = finalConfig.defaultSimilarityThreshold ?? 0.0;
+    this.defaultFallback = finalConfig.defaultFallbackStrategy ?? "most-rated";
+
+    if (finalConfig.defaultExplain !== undefined && typeof finalConfig.defaultExplain !== "boolean") {
       throw new ValidationError("defaultExplain must be a boolean");
     }
-    this.defaultExplain = config.defaultExplain ?? false;
+    this.defaultExplain = finalConfig.defaultExplain ?? false;
 
-    if (config.defaultMinIntersectionSize !== undefined) {
+    if (finalConfig.defaultMinIntersectionSize !== undefined) {
       if (
-        typeof config.defaultMinIntersectionSize !== "number" ||
-        Number.isNaN(config.defaultMinIntersectionSize) ||
-        !Number.isFinite(config.defaultMinIntersectionSize) ||
-        !Number.isInteger(config.defaultMinIntersectionSize) ||
-        config.defaultMinIntersectionSize < 1
+        typeof finalConfig.defaultMinIntersectionSize !== "number" ||
+        Number.isNaN(finalConfig.defaultMinIntersectionSize) ||
+        !Number.isFinite(finalConfig.defaultMinIntersectionSize) ||
+        !Number.isInteger(finalConfig.defaultMinIntersectionSize) ||
+        finalConfig.defaultMinIntersectionSize < 1
       ) {
         throw new ValidationError("defaultMinIntersectionSize must be a positive integer");
       }
     }
-    this.defaultMinIntersectionSize = config.defaultMinIntersectionSize ?? 1;
+    this.defaultMinIntersectionSize = finalConfig.defaultMinIntersectionSize ?? 1;
 
-    if (config.defaultK !== undefined) {
+    if (finalConfig.defaultK !== undefined) {
       if (
-        typeof config.defaultK !== "number" ||
-        Number.isNaN(config.defaultK) ||
-        !Number.isFinite(config.defaultK) ||
-        !Number.isInteger(config.defaultK) ||
-        config.defaultK < 1
+        typeof finalConfig.defaultK !== "number" ||
+        Number.isNaN(finalConfig.defaultK) ||
+        !Number.isFinite(finalConfig.defaultK) ||
+        !Number.isInteger(finalConfig.defaultK) ||
+        finalConfig.defaultK < 1
       ) {
         throw new ValidationError("defaultK must be a positive integer");
       }
-      this.defaultK = config.defaultK;
+      this.defaultK = finalConfig.defaultK;
     }
 
-    if (config.defaultHybridAlpha !== undefined) {
+    if (finalConfig.defaultHybridAlpha !== undefined) {
       if (
-        typeof config.defaultHybridAlpha !== "number" ||
-        Number.isNaN(config.defaultHybridAlpha) ||
-        !Number.isFinite(config.defaultHybridAlpha) ||
-        config.defaultHybridAlpha < 0.0 ||
-        config.defaultHybridAlpha > 1.0
+        typeof finalConfig.defaultHybridAlpha !== "number" ||
+        Number.isNaN(finalConfig.defaultHybridAlpha) ||
+        !Number.isFinite(finalConfig.defaultHybridAlpha) ||
+        finalConfig.defaultHybridAlpha < 0.0 ||
+        finalConfig.defaultHybridAlpha > 1.0
       ) {
         throw new ValidationError("defaultHybridAlpha must be a number between 0.0 and 1.0");
       }
     }
-    this.defaultHybridAlpha = config.defaultHybridAlpha ?? 0.5;
+    this.defaultHybridAlpha = finalConfig.defaultHybridAlpha ?? 0.5;
 
-    if (config.interactionWeights) {
-      if (typeof config.interactionWeights !== "object" || config.interactionWeights === null) {
+    if (finalConfig.interactionWeights) {
+      if (typeof finalConfig.interactionWeights !== "object" || finalConfig.interactionWeights === null) {
         throw new ValidationError("interactionWeights must be a valid object");
       }
-      for (const [type, weight] of Object.entries(config.interactionWeights)) {
+      for (const [type, weight] of Object.entries(finalConfig.interactionWeights)) {
         if (typeof weight !== "number" || Number.isNaN(weight) || !Number.isFinite(weight) || weight <= 0) {
           throw new ValidationError(`Weight for interaction type '${type}' must be a positive, finite number`);
         }
       }
-      this.interactionWeights = config.interactionWeights;
+      this.interactionWeights = finalConfig.interactionWeights;
     }
 
-    if (config.decayHalfLifeDays !== undefined) {
+    if (finalConfig.decayHalfLifeDays !== undefined) {
       if (
-        typeof config.decayHalfLifeDays !== "number" ||
-        Number.isNaN(config.decayHalfLifeDays) ||
-        !Number.isFinite(config.decayHalfLifeDays) ||
-        config.decayHalfLifeDays <= 0
+        typeof finalConfig.decayHalfLifeDays !== "number" ||
+        Number.isNaN(finalConfig.decayHalfLifeDays) ||
+        !Number.isFinite(finalConfig.decayHalfLifeDays) ||
+        finalConfig.decayHalfLifeDays <= 0
       ) {
         throw new ValidationError("decayHalfLifeDays must be a positive, finite number");
       }
-      this.decayHalfLifeDays = config.decayHalfLifeDays;
+      this.decayHalfLifeDays = finalConfig.decayHalfLifeDays;
     }
 
-    let catW = config.defaultContentCategoryWeight;
-    let tagW = config.defaultContentTagWeight;
+    let catW = finalConfig.defaultContentCategoryWeight;
+    let tagW = finalConfig.defaultContentTagWeight;
     if (catW !== undefined) {
       if (typeof catW !== "number" || Number.isNaN(catW) || catW < 0.0 || catW > 1.0) {
         throw new ValidationError("defaultContentCategoryWeight must be a number between 0.0 and 1.0");
@@ -228,17 +272,17 @@ export class NanoRecommender {
     this.defaultContentTagWeight = tagW;
 
     let maxCacheSize: number | undefined;
-    if (config.maxSimilarityCacheSize !== undefined) {
+    if (finalConfig.maxSimilarityCacheSize !== undefined) {
       if (
-        typeof config.maxSimilarityCacheSize !== "number" ||
-        Number.isNaN(config.maxSimilarityCacheSize) ||
-        !Number.isFinite(config.maxSimilarityCacheSize) ||
-        !Number.isInteger(config.maxSimilarityCacheSize) ||
-        config.maxSimilarityCacheSize <= 0
+        typeof finalConfig.maxSimilarityCacheSize !== "number" ||
+        Number.isNaN(finalConfig.maxSimilarityCacheSize) ||
+        !Number.isFinite(finalConfig.maxSimilarityCacheSize) ||
+        !Number.isInteger(finalConfig.maxSimilarityCacheSize) ||
+        finalConfig.maxSimilarityCacheSize <= 0
       ) {
         throw new ValidationError("maxSimilarityCacheSize must be a positive integer");
       }
-      maxCacheSize = config.maxSimilarityCacheSize;
+      maxCacheSize = finalConfig.maxSimilarityCacheSize;
     }
 
     this.itemCache = new SimilarityCache(maxCacheSize);
@@ -250,6 +294,27 @@ export class NanoRecommender {
 
     loadWasm().catch(() => {
       // Fallback silently
+    });
+  }
+
+  /**
+   * Creates a NanoRecommender instance pre-configured for a specific domain preset.
+   *
+   * @param preset The name of the preset ("ecommerce" | "media").
+   * @param configOverrides Optional configurations to override preset defaults.
+   * @returns A pre-configured NanoRecommender instance.
+   */
+  public static fromPreset(
+    preset: "ecommerce" | "media",
+    configOverrides: NanoRecommenderConfig = {}
+  ): NanoRecommender {
+    const presetConfig = PRESETS[preset];
+    if (!presetConfig) {
+      throw new ValidationError(`Unknown preset: ${preset}`);
+    }
+    return new NanoRecommender({
+      ...presetConfig,
+      ...configOverrides,
     });
   }
 
@@ -608,14 +673,47 @@ export class NanoRecommender {
     const k = options.k ?? this.defaultK;
     const finalOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...combinedOptions };
 
+    let resolvedStrategy: "item-based" | "user-based" | "hybrid" | "content-based";
+    if (strategy === "auto") {
+      const userVector = this.matrix.getUserVector(uIdx as any);
+      const interactionCount = userVector ? userVector.size : 0;
+      if (interactionCount === 0) {
+        resolvedStrategy = "item-based";
+      } else if (interactionCount < 5) {
+        const hasMetadata = (this.matrix as any).itemCategories.size > 0 || (this.matrix as any).itemTags.size > 0;
+        if (hasMetadata) {
+          resolvedStrategy = "content-based";
+        } else {
+          resolvedStrategy = "hybrid";
+        }
+      } else {
+        const categories = new Set<string>();
+        if (userVector) {
+          for (const itemId of userVector.keys()) {
+            const category = this.matrix.getItemCategory(itemId);
+            if (category) {
+              categories.add(category);
+            }
+          }
+        }
+        if (categories.size > 1) {
+          resolvedStrategy = "user-based";
+        } else {
+          resolvedStrategy = "item-based";
+        }
+      }
+    } else {
+      resolvedStrategy = strategy;
+    }
+
     let internalRecs: GenericRecommendation<number, number>[];
     const mapped = this.mapOptionsFilters(finalOptions);
-    if (strategy === "hybrid") {
+    if (resolvedStrategy === "hybrid") {
       internalRecs = this.recommendHybridInternal(uIdx, finalOptions);
-    } else if (strategy === "user-based") {
+    } else if (resolvedStrategy === "user-based") {
       const cleanMapped = this.extractUserBasedOptions(mapped);
       internalRecs = this.recommendUserBasedInternal(uIdx, cleanMapped);
-    } else if (strategy === "content-based") {
+    } else if (resolvedStrategy === "content-based") {
       const cleanMapped = this.extractContentBasedOptions(mapped);
       internalRecs = this.recommendContentBasedInternal(uIdx, cleanMapped);
     } else {
@@ -1114,6 +1212,54 @@ export class NanoRecommender {
   }
 
   /**
+   * Tracks and retrieves operational internal metrics (hit rates, memory usage, etc.).
+   */
+  public metrics(): RecommenderMetrics {
+    const itemStats = this.itemCache.getStats();
+    const userStats = this.userCache.getStats();
+    const contentStats = this.contentCache.getStats();
+
+    const totalHits = itemStats.hits + userStats.hits + contentStats.hits;
+    const totalMisses = itemStats.misses + userStats.misses + contentStats.misses;
+    const cacheHitRate = totalHits + totalMisses > 0 ? totalHits / (totalHits + totalMisses) : 0.0;
+
+    const memoryUsage = typeof process !== "undefined" && typeof process.memoryUsage === "function"
+      ? process.memoryUsage()
+      : undefined;
+
+    return {
+      cacheHitRate,
+      ...(memoryUsage ? { memoryUsage } : {}),
+      cacheDetails: {
+        itemCache: itemStats,
+        userCache: userStats,
+        contentCache: contentStats,
+      },
+      stats: this.stats(),
+    };
+  }
+
+  /**
+   * Returns a builder instance for querying user recommendations using method chaining.
+   *
+   * @param userId The unique identifier of the target user.
+   * @returns A query builder instance.
+   */
+  public query(userId: string): RecommendationQueryBuilder {
+    return new RecommendationQueryBuilder(this, userId);
+  }
+
+  /**
+   * Returns a builder instance for querying session recommendations using method chaining.
+   *
+   * @param sessionItemIds List of unique item IDs in the active session.
+   * @returns A session query builder instance.
+   */
+  public querySession(sessionItemIds: string[]): SessionRecommendationQueryBuilder {
+    return new SessionRecommendationQueryBuilder(this, sessionItemIds);
+  }
+
+  /**
    * Exports the entire internal state of the recommender engine.
    *
    * @returns The serialized RecommenderState object.
@@ -1174,4 +1320,209 @@ export class NanoRecommender {
       }
     }
   }
+}
+
+/**
+ * Builder class for constructing and executing recommendation queries.
+ */
+export class RecommendationQueryBuilder {
+  private readonly recommender: NanoRecommender;
+  private readonly userId: string;
+  private readonly options: RecommendationOptions = {};
+
+  constructor(recommender: NanoRecommender, userId: string) {
+    this.recommender = recommender;
+    this.userId = userId;
+  }
+
+  public withStrategy(strategy: "item-based" | "user-based" | "hybrid" | "content-based" | "auto"): this {
+    (this.options as any).strategy = strategy;
+    return this;
+  }
+
+  public withLimit(limit: number): this {
+    (this.options as any).limit = limit;
+    return this;
+  }
+
+  public withSimilarityThreshold(threshold: number): this {
+    (this.options as any).similarityThreshold = threshold;
+    return this;
+  }
+
+  public withMinIntersectionSize(size: number): this {
+    (this.options as any).minIntersectionSize = size;
+    return this;
+  }
+
+  public withK(k: number): this {
+    (this.options as any).k = k;
+    return this;
+  }
+
+  public explain(explain: boolean = true): this {
+    (this.options as any).explain = explain;
+    return this;
+  }
+
+  public excludeItemIds(itemIds: string[]): this {
+    (this.options as any).excludeItemIds = itemIds;
+    return this;
+  }
+
+  public withFilter(filter: (itemId: string) => boolean): this {
+    (this.options as any).filter = filter;
+    return this;
+  }
+
+  public withCategory(category: string): this {
+    (this.options as any).filterCategory = category;
+    return this;
+  }
+
+  public withTags(tags: string[]): this {
+    (this.options as any).filterTags = tags;
+    return this;
+  }
+
+  public withHybridAlpha(alpha: number): this {
+    (this.options as any).hybridAlpha = alpha;
+    return this;
+  }
+
+  public withHybridBaseStrategy(baseStrategy: "item-based" | "user-based" | "content-based"): this {
+    (this.options as any).hybridBaseStrategy = baseStrategy;
+    return this;
+  }
+
+  public withHybridPopularityStrategy(popularityStrategy: "most-rated" | "most-viewed" | "most-purchased" | "content-based"): this {
+    (this.options as any).hybridPopularityStrategy = popularityStrategy;
+    return this;
+  }
+
+  public withSession(useSession: boolean = true): this {
+    (this.options as any).useSession = useSession;
+    return this;
+  }
+
+  public withSessionStrategy(strategy: "transition" | "similarity"): this {
+    (this.options as any).sessionStrategy = strategy;
+    return this;
+  }
+
+  public withSessionDecayFactor(decayFactor: number): this {
+    (this.options as any).decayFactor = decayFactor;
+    return this;
+  }
+
+  public withSessionSimilarityStrategy(strategy: "item-based" | "content-based"): this {
+    (this.options as any).similarityStrategy = strategy;
+    return this;
+  }
+
+  public execute(): Recommendation[] {
+    return this.recommender.recommend(this.userId, this.options);
+  }
+}
+
+/**
+ * Builder class for constructing and executing session recommendation queries.
+ */
+export class SessionRecommendationQueryBuilder {
+  private readonly recommender: NanoRecommender;
+  private readonly sessionItemIds: string[];
+  private readonly options: SessionRecommendationOptions = {};
+
+  constructor(recommender: NanoRecommender, sessionItemIds: string[]) {
+    this.recommender = recommender;
+    this.sessionItemIds = sessionItemIds;
+  }
+
+  public withLimit(limit: number): this {
+    (this.options as any).limit = limit;
+    return this;
+  }
+
+  public withSessionStrategy(strategy: "transition" | "similarity"): this {
+    (this.options as any).sessionStrategy = strategy;
+    return this;
+  }
+
+  public withSessionDecayFactor(decayFactor: number): this {
+    (this.options as any).decayFactor = decayFactor;
+    return this;
+  }
+
+  public withSessionSimilarityStrategy(strategy: "item-based" | "content-based"): this {
+    (this.options as any).similarityStrategy = strategy;
+    return this;
+  }
+
+  public withSimilarityThreshold(threshold: number): this {
+    (this.options as any).similarityThreshold = threshold;
+    return this;
+  }
+
+  public withMinIntersectionSize(size: number): this {
+    (this.options as any).minIntersectionSize = size;
+    return this;
+  }
+
+  public withK(k: number): this {
+    (this.options as any).k = k;
+    return this;
+  }
+
+  public explain(explain: boolean = true): this {
+    (this.options as any).explain = explain;
+    return this;
+  }
+
+  public excludeItemIds(itemIds: string[]): this {
+    (this.options as any).excludeItemIds = itemIds;
+    return this;
+  }
+
+  public withFilter(filter: (itemId: string) => boolean): this {
+    (this.options as any).filter = filter;
+    return this;
+  }
+
+  public withCategory(category: string): this {
+    (this.options as any).filterCategory = category;
+    return this;
+  }
+
+  public withTags(tags: string[]): this {
+    (this.options as any).filterTags = tags;
+    return this;
+  }
+
+  public execute(): Recommendation[] {
+    return this.recommender.recommendSession(this.sessionItemIds, this.options);
+  }
+}
+
+export interface CacheStats {
+  readonly hits: number;
+  readonly misses: number;
+  readonly size: number;
+  readonly hitRate: number;
+}
+
+export interface RecommenderMetrics {
+  readonly cacheHitRate: number;
+  readonly memoryUsage?: {
+    readonly rss: number;
+    readonly heapTotal: number;
+    readonly heapUsed: number;
+    readonly external: number;
+    readonly arrayBuffers?: number;
+  };
+  readonly cacheDetails: {
+    readonly itemCache: CacheStats;
+    readonly userCache: CacheStats;
+    readonly contentCache: CacheStats;
+  };
+  readonly stats: RecommenderStats;
 }

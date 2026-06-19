@@ -46,6 +46,15 @@
   - [Session-Based Recommendations](#11-session-based-recommendations)
 - [Web Worker Support](#web-worker-support)
 - [Offline Evaluation Suite](#offline-evaluation-suite)
+  - [Splitting Strategies](#splitting-strategies)
+  - [Running Evaluations](#running-evaluations)
+  - [Strategy Comparison](#strategy-comparison)
+  - [Hyperparameter Tuning (Grid Search)](#hyperparameter-tuning-grid-search)
+- [Developer Experience (DX) & Builder API](#developer-experience-dx--builder-api)
+  - [Configuration Presets](#configuration-presets)
+  - [Builder API (Method Chaining)](#builder-api-method-chaining)
+  - [Strategy Auto-routing](#strategy-auto-routing)
+  - [Operational Metrics (Observability)](#operational-metrics-observability)
 - [Performance](#performance)
 - [API Reference](#api-reference)
 - [Architecture](#architecture)
@@ -483,7 +492,7 @@ const { train, test } = splitUserHoldout(dataset, 0.8); // 80% train, 20% test
 
 ### Running Evaluations
 
-The `evaluate` function automates training a recommender and testing its accuracy, returning standard ranking and rating prediction metrics. It automatically handles exporting, clearing, and fully restoring the original state of the recommender instance once evaluation completes.
+The `evaluate` function automates training a recommender and testing its accuracy, returning standard ranking, rating prediction, and advanced coverage/diversity metrics. It automatically handles exporting, clearing, and fully restoring the original state of the recommender instance once evaluation completes.
 
 ```typescript
 import { NanoRecommender, evaluate } from "@fizm/nano-recommender";
@@ -491,7 +500,7 @@ import { NanoRecommender, evaluate } from "@fizm/nano-recommender";
 const recommender = new NanoRecommender();
 
 const results = evaluate(recommender, train, test, {
-  topK: 10, // K for Precision@K, Recall@K, and NDCG@K
+  topK: 10, // K for Precision, Recall, NDCG, MAP, MRR, Diversity, Novelty, Serendipity
   strategyOptions: {
     strategy: "item-based",
     similarityThreshold: 0.1,
@@ -502,14 +511,124 @@ console.log(results);
 /*
 Output:
 {
-  rmse: 0.854,     // Root Mean Squared Error (rating prediction quality)
-  mae: 0.652,      // Mean Absolute Error
-  precision: 0.15, // Mean Precision@10 across test users
-  recall: 0.32,    // Mean Recall@10 across test users
-  ndcg: 0.28,      // Mean NDCG@10 (ranking quality)
-  coverage: 0.45   // Catalog Coverage (ratio of recommended items / total catalog items)
+  rmse: 0.854,       // Root Mean Squared Error (rating prediction quality)
+  mae: 0.652,        // Mean Absolute Error
+  precision: 0.15,   // Mean Precision@10 across test users
+  recall: 0.32,      // Mean Recall@10 across test users
+  ndcg: 0.28,        // Mean NDCG@10 (ranking quality)
+  map: 0.22,         // Mean Average Precision (MAP@10)
+  mrr: 0.35,         // Mean Reciprocal Rank (MRR@10)
+  diversity: 0.68,   // Intra-list diversity (average pairwise dissimilarity)
+  novelty: 2.12,     // Mean self-information (surprise score based on popularity)
+  serendipity: 0.18, // Relevance-aware surprise (unexpected relevant recommendations)
+  coverage: 0.45     // Catalog Coverage (ratio of recommended items / total catalog items)
 }
 */
+```
+
+### Strategy Comparison
+
+You can compare the performance of multiple recommendation strategies directly on the same train/test split:
+
+```typescript
+import { compareStrategies } from "@fizm/nano-recommender";
+
+const results = compareStrategies(recommender, train, test, ["item-based", "user-based", "hybrid"], { topK: 10 });
+console.log(results["item-based"].ndcg);
+console.log(results["user-based"].ndcg);
+```
+
+### Hyperparameter Tuning (Grid Search)
+
+You can run automated hyperparameter tuning using `tune` to search for the best configuration grid and optimize a target metric:
+
+```typescript
+import { tune } from "@fizm/nano-recommender";
+
+const tuningResult = tune(recommender, train, test, {
+  similarityThreshold: [0.0, 0.1, 0.2],
+  strategy: ["item-based", "user-based"],
+  k: [20, 50]
+}, {
+  metric: "ndcg", // Metric to optimize
+  topK: 10
+});
+
+console.log(tuningResult.bestParameters); // e.g., { similarityThreshold: 0.1, strategy: "user-based", k: 50 }
+console.log(tuningResult.bestScore);
+```
+
+---
+
+## Developer Experience (DX) & Builder API
+
+The library provides modern ergonomics and developer-friendly APIs designed for production convenience and system observability.
+
+### Configuration Presets
+
+Instead of configuring weights and strategies manually, you can initialize the recommender using domain-specific presets matching your business model:
+
+*   **`ecommerce`**: Optimizes for purchases, shopping carts, and views. Uses `hybrid` strategy by default with `most-purchased` fallbacks.
+*   **`media`**: Optimizes for watching and clicks, utilizing fast `item-based` CF with `most-viewed` fallbacks and a default 30-day time-decay half-life.
+
+```typescript
+import { NanoRecommender } from "@fizm/nano-recommender";
+
+// Instantiate with a preset
+const recommender = new NanoRecommender("ecommerce");
+
+// Instantiate with overrides
+const mediaRecommender = NanoRecommender.fromPreset("media", {
+  defaultK: 50
+});
+```
+
+### Builder API (Method Chaining)
+
+You can construct recommendation queries fluently using method chaining, which improves code readability compared to passing deep options objects:
+
+```typescript
+const recommendations = recommender.query("user_123")
+  .withStrategy("hybrid")
+  .withLimit(5)
+  .withSimilarityThreshold(0.1)
+  .withK(30)
+  .excludeItemIds(["item_already_bought"])
+  .withFilter((itemId) => itemId.startsWith("category_a_"))
+  .explain(true)
+  .execute();
+```
+
+For session-based recommendations:
+```typescript
+const recommendations = recommender.querySession(["item_1", "item_2"])
+  .withLimit(3)
+  .withSessionStrategy("similarity")
+  .execute();
+```
+
+### Strategy Auto-routing
+
+Enabling the `"auto"` strategy allows the engine to route recommendations automatically based on the user's interaction profile:
+1. **Cold Start (0 interactions)**: Automatically routes to the configured fallback popularity engine.
+2. **Sparse Profile (1 to 4 interactions)**: Routes to `content-based` (if category/tag metadata is populated) or `hybrid` to bypass collaborative filtering sparsity limits.
+3. **Established Profile (5+ interactions)**: Routes to `user-based` if the user shows diverse interest across categories, or `item-based` if their history is category-focused.
+
+```typescript
+const recommendations = recommender.recommend("user_123", {
+  strategy: "auto"
+});
+```
+
+### Operational Metrics (Observability)
+
+Exposes runtime statistics to trace performance, heap memory usage, and cache hit rates in production:
+
+```typescript
+const metrics = recommender.metrics();
+console.log(metrics.cacheHitRate); // e.g. 0.82
+console.log(metrics.cacheDetails.itemCache); // { hits: 450, misses: 100, size: 550, hitRate: 0.818 }
+console.log(metrics.memoryUsage?.heapUsed); // Node.js memory footprint (if available)
 ```
 
 ---

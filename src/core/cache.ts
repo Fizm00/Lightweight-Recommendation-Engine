@@ -8,6 +8,8 @@ export class SimilarityCache {
   private readonly index = new Map<number, Set<number>>();
   private readonly idMap = new Map<string, number>();
   private readonly idToMap: string[] = [];
+  private hits = 0;
+  private misses = 0;
   public toInternal?: (id: string | number) => string | number;
 
   /**
@@ -55,10 +57,15 @@ export class SimilarityCache {
   public get(id1: string | number, id2: string | number): number | undefined {
     const key = this.getCacheKey(id1, id2);
     const score = this.cache.get(key);
-    if (score !== undefined && this.maxEntries !== undefined) {
-      // Refresh insertion order for LRU only if capacity is limited
-      this.cache.delete(key);
-      this.cache.set(key, score);
+    if (score !== undefined) {
+      this.hits++;
+      if (this.maxEntries !== undefined) {
+        // Refresh insertion order for LRU only if capacity is limited
+        this.cache.delete(key);
+        this.cache.set(key, score);
+      }
+    } else {
+      this.misses++;
     }
     return score;
   }
@@ -177,5 +184,27 @@ export class SimilarityCache {
    */
   public size(): number {
     return this.cache.size;
+  }
+
+  /**
+   * Retrieves hit and miss stats for the cache.
+   */
+  public getStats(): { hits: number; misses: number; size: number; hitRate: number } {
+    const total = this.hits + this.misses;
+    const hitRate = total > 0 ? this.hits / total : 0.0;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      size: this.cache.size,
+      hitRate,
+    };
+  }
+
+  /**
+   * Resets hit and miss stats counters.
+   */
+  public resetStats(): void {
+    this.hits = 0;
+    this.misses = 0;
   }
 }

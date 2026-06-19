@@ -6,6 +6,11 @@ import {
   calculateNDCG,
   calculateRMSE,
   calculateMAE,
+  calculateMAP,
+  calculateMRR,
+  calculateDiversity,
+  calculateNovelty,
+  calculateSerendipity,
 } from "./metrics.js";
 
 /**
@@ -34,6 +39,16 @@ export interface EvaluationResult {
   readonly ndcg: number;
   /** Item coverage ratio (unique recommended items in Top-K / total unique items in training set). */
   readonly coverage: number;
+  /** Mean Average Precision across all test users. */
+  readonly map: number;
+  /** Mean Reciprocal Rank across all test users. */
+  readonly mrr: number;
+  /** Mean Intra-List Diversity across all test users. */
+  readonly diversity: number;
+  /** Mean Novelty across all test users. */
+  readonly novelty: number;
+  /** Mean Serendipity across all test users. */
+  readonly serendipity: number;
 }
 
 /**
@@ -79,6 +94,11 @@ export function evaluate(
     let totalPrecision = 0.0;
     let totalRecall = 0.0;
     let totalNDCG = 0.0;
+    let totalMAP = 0.0;
+    let totalMRR = 0.0;
+    let totalDiversity = 0.0;
+    let totalNovelty = 0.0;
+    let totalSerendipity = 0.0;
     let evaluatedUsersCount = 0;
 
     const ratingPredictions: { actual: number; predicted: number }[] = [];
@@ -119,10 +139,20 @@ export function evaluate(
       const precision = calculatePrecision(recItemIds, testItemIdsSet, topK);
       const recall = calculateRecall(recItemIds, testItemIdsSet, topK);
       const ndcg = calculateNDCG(recItemIds, testItemIdsSet, topK);
+      const map = calculateMAP(recItemIds, testItemIdsSet, topK);
+      const mrr = calculateMRR(recItemIds, testItemIdsSet, topK);
+      const diversity = calculateDiversity(recItemIds, (recommender as any).matrix, topK);
+      const novelty = calculateNovelty(recItemIds, (recommender as any).matrix, topK);
+      const serendipity = calculateSerendipity(recItemIds, testItemIdsSet, (recommender as any).matrix, topK);
 
       totalPrecision += precision;
       totalRecall += recall;
       totalNDCG += ndcg;
+      totalMAP += map;
+      totalMRR += mrr;
+      totalDiversity += diversity;
+      totalNovelty += novelty;
+      totalSerendipity += serendipity;
       evaluatedUsersCount++;
 
       // Gather rating prediction errors
@@ -146,6 +176,11 @@ export function evaluate(
     const meanPrecision = evaluatedUsersCount > 0 ? totalPrecision / evaluatedUsersCount : 0.0;
     const meanRecall = evaluatedUsersCount > 0 ? totalRecall / evaluatedUsersCount : 0.0;
     const meanNDCG = evaluatedUsersCount > 0 ? totalNDCG / evaluatedUsersCount : 0.0;
+    const meanMAP = evaluatedUsersCount > 0 ? totalMAP / evaluatedUsersCount : 0.0;
+    const meanMRR = evaluatedUsersCount > 0 ? totalMRR / evaluatedUsersCount : 0.0;
+    const meanDiversity = evaluatedUsersCount > 0 ? totalDiversity / evaluatedUsersCount : 0.0;
+    const meanNovelty = evaluatedUsersCount > 0 ? totalNovelty / evaluatedUsersCount : 0.0;
+    const meanSerendipity = evaluatedUsersCount > 0 ? totalSerendipity / evaluatedUsersCount : 0.0;
 
     const rmse = calculateRMSE(ratingPredictions);
     const mae = calculateMAE(ratingPredictions);
@@ -160,10 +195,42 @@ export function evaluate(
       recall: meanRecall,
       ndcg: meanNDCG,
       coverage,
+      map: meanMAP,
+      mrr: meanMRR,
+      diversity: meanDiversity,
+      novelty: meanNovelty,
+      serendipity: meanSerendipity,
     };
   } finally {
     // 5. Restore original state
     recommender.clear();
     recommender.import(originalState);
   }
+}
+
+/**
+ * Compares the performance of different recommendation strategies on the same dataset.
+ *
+ * @param recommender The NanoRecommender instance to evaluate.
+ * @param trainData The training set of interactions.
+ * @param testData The testing set of interactions.
+ * @param strategies Array of strategies to compare.
+ * @param options Evaluation options (excluding strategyOptions, as they are overridden).
+ * @returns A record mapping strategy name to its EvaluationResult.
+ */
+export function compareStrategies(
+  recommender: NanoRecommender,
+  trainData: Interaction[],
+  testData: Interaction[],
+  strategies: ("item-based" | "user-based" | "hybrid" | "content-based")[],
+  options: Omit<EvaluationOptions, "strategyOptions"> = {}
+): Record<string, EvaluationResult> {
+  const results: Record<string, EvaluationResult> = {};
+  for (const strategy of strategies) {
+    results[strategy] = evaluate(recommender, trainData, testData, {
+      ...options,
+      strategyOptions: { strategy },
+    });
+  }
+  return results;
 }
