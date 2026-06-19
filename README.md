@@ -212,6 +212,21 @@ The library contains a high-performance WebAssembly backend compiled from Rust u
 - **Zero-Dependency base64 Inlining**: The Wasm binary is encoded as a Base64 string and embedded directly inside the code (`wasm-binary.ts`). This allows it to run out of the box in both Node.js and browser environments without needing file system reads or network requests.
 - **Automatic Loading**: Instantiating `NanoRecommender` automatically triggers asynchronous loading of the Wasm module in the background. If the module is not yet loaded or if the environment doesn't support WebAssembly, the engine silently falls back to pure JavaScript/TypeScript calculations.
 - **Web Worker Compatibility**: The Wasm module is automatically pre-loaded when using the Web Worker API, providing asynchronous multithreaded recommendation queries fully accelerated by WebAssembly.
+- **Adaptive Auto-Routing**: Under the default `"auto"` strategy, the engine automatically routes small/sparse vectors (below `wasmMinVectorSize`, defaulting to 20 interactions) to the pure JS engine. This prevents the boundary marshalling overhead (which can make WASM slightly slower than JS for very small arrays) while keeping WASM active for larger profiles. Developers can also manually override this behavior via `wasmStrategy: "always" | "never"`.
+
+### WebAssembly Strategy Configuration
+
+You can configure the WebAssembly engine behavior in the constructor options:
+
+```typescript
+const recommender = new NanoRecommender({
+  // 'auto' (default): use WASM for vectors >= wasmMinVectorSize, JS for smaller vectors.
+  // 'always': force WebAssembly for all similarity calculations.
+  // 'never': force pure JavaScript/TypeScript fallback calculations.
+  wasmStrategy: "auto",
+  wasmMinVectorSize: 20, // Customize crossover size threshold
+});
+```
 
 ### Manual Pre-loading (Optional)
 If you want to ensure WebAssembly is loaded and compiled before running any calculations, you can call the `loadWasm` helper:
@@ -722,23 +737,23 @@ The benchmark suite was run on synthetic datasets, measuring loading speed, memo
 
 | Scale | Users | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 1,000 | 100 | 10,000 | 9.98 ms | 1,001,593 | 3.57 MB | 0.90 MB |
-| **Medium** | 10,000 | 1,000 | 100,000 | 61.29 ms | 1,631,558 | 35.16 MB | 31.48 MB |
-| **Large** | 100,000 | 5,000 | 1,000,000 | 1,009.52 ms | 990,567 | 350.24 MB | 167.85 MB |
+| **Small** | 1,000 | 100 | 10,000 | 9.84 ms | 1,016,312 | 3.58 MB | 0.90 MB |
+| **Medium** | 10,000 | 1,000 | 100,000 | 62.42 ms | 1,601,976 | 35.16 MB | 31.48 MB |
+| **Large** | 100,000 | 5,000 | 1,000,000 | 1,236.78 ms | 808,554 | 348.98 MB | 167.85 MB |
 
 > [!NOTE]
 > **Cache Memory Footprint Anomaly Explanation**:
 > In the Medium scale, the cached heap delta (31.48 MB) is almost equal to the loaded delta (35.16 MB) because the 100-user sample queries touch a large fraction of the total possible item-item pairs for a small catalog of 1,000 items. 
-> In contrast, in the Large scale, the cached heap delta (167.85 MB) is relatively smaller compared to the loaded delta (350.24 MB) because a 100-user sample only touches a tiny fraction of the total possible pairwise similarities for a catalog of 5,000 items.
+> In contrast, in the Large scale, the cached heap delta (167.85 MB) is relatively smaller compared to the loaded delta (348.98 MB) because a 100-user sample only touches a tiny fraction of the total possible pairwise similarities for a catalog of 5,000 items.
 
 ### Latency (Cache Hit vs. Miss - Item-Based CF)
 - Measures average and P95 recommendation query latencies with WASM Enabled.
 
 | Scale | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Hit Speedup |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 0.821 ms | 1.877 ms | 0.539 ms | 0.539 ms | 1.5x |
-| **Medium** | 10.103 ms | 16.059 ms | 3.668 ms | 3.668 ms | 2.8x |
-| **Large** | 60.588 ms | 76.015 ms | 9.636 ms | 9.636 ms | 6.3x |
+| **Small** | 0.802 ms | 1.839 ms | 0.531 ms | 0.531 ms | 1.5x |
+| **Medium** | 10.938 ms | 19.924 ms | 3.935 ms | 3.935 ms | 2.8x |
+| **Large** | 67.169 ms | 91.227 ms | 10.753 ms | 10.753 ms | 6.2x |
 
 > [!NOTE]
 > **Cache-Hit Avg & P95 Variance Explanation**:
@@ -749,42 +764,64 @@ The benchmark suite was run on synthetic datasets, measuring loading speed, memo
 
 | Scale | Strategy | JS Fallback (Avg) | WASM Enabled (Avg) | WASM Acceleration |
 | :--- | :--- | :---: | :---: | :---: |
-| **Small** | item-based | 0.911 ms | 0.821 ms | 1.11x |
-| **Small** | user-based | 1.688 ms | 1.494 ms | 1.13x |
-| **Medium** | item-based | 20.541 ms | 10.103 ms | 2.03x |
-| **Medium** | user-based | 5.672 ms | 6.062 ms | 0.94x |
-| **Large** | item-based | 169.797 ms | 60.588 ms | 2.80x |
-| **Large** | user-based | 36.450 ms | 39.592 ms | 0.92x |
+| **Small** | item-based | 0.950 ms | 0.802 ms | 1.18x |
+| **Small** | user-based | 1.827 ms | 1.594 ms | 1.15x |
+| **Small** | hybrid | 0.962 ms | 0.713 ms | 1.35x |
+| **Small** | content-based | 0.097 ms | 0.163 ms | 0.59x |
+| **Small** | session-based | 0.170 ms | 0.190 ms | 0.89x |
+| **Medium** | item-based | 21.507 ms | 10.938 ms | 1.97x |
+| **Medium** | user-based | 5.436 ms | 6.962 ms | 0.78x |
+| **Medium** | hybrid | 21.807 ms | 10.869 ms | 2.01x |
+| **Medium** | content-based | 6.014 ms | 6.008 ms | 1.00x |
+| **Medium** | session-based | 0.800 ms | 0.607 ms | 1.32x |
+| **Large** | item-based | 171.085 ms | 67.169 ms | 2.55x |
+| **Large** | user-based | 39.374 ms | 40.207 ms | 0.98x |
+| **Large** | hybrid | 204.015 ms | 69.323 ms | 2.94x |
+| **Large** | content-based | 75.781 ms | 62.991 ms | 1.20x |
+| **Large** | session-based | 2.201 ms | 2.175 ms | 1.01x |
 
 > [!NOTE]
-> **User-Based CF WebAssembly Acceleration**:
-> In the User-based strategy, WebAssembly acceleration shows around ~0.92x (slightly slower) due to the nature of sparse vectors. Because each user's rating vector is extremely sparse (only 10 items), the overhead of mapping JS arrays to TypedArrays and marshalling them across the WASM boundary exceeds the actual execution time of pure JS vector arithmetic. For denser vectors or larger catalogs, WebAssembly provides substantial speedups.
+> **WASM vs JS Fallback Benchmark Settings**:
+> This raw comparison table was generated by running the benchmark suite with `wasmStrategy: "always"` to measure and show the raw WebAssembly execution speed compared to pure JavaScript/TypeScript for all vector configurations.
+> Under the default `"auto"` strategy (which has `wasmMinVectorSize = 20`), the engine automatically routes user-based CF on sparse arrays to the pure JS engine, bypassing the minor boundary marshalling overhead and avoiding the user-based CF slowdown.
 
 ### Multi-Strategy Latency (WASM Enabled)
 - Comparison of average latencies across all primary recommendation strategies.
 
 | Scale | Item-Based CF | User-Based CF | Hybrid Strategy | Content-Based | Session-Based |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 0.821 ms | 1.494 ms | 0.680 ms | 0.166 ms | 0.190 ms |
-| **Medium** | 10.103 ms | 6.062 ms | 10.556 ms | 5.982 ms | 0.564 ms |
-| **Large** | 60.588 ms | 39.592 ms | 66.707 ms | 68.158 ms | 2.390 ms |
+| **Small** | 0.802 ms | 1.594 ms | 0.713 ms | 0.163 ms | 0.190 ms |
+| **Medium** | 10.938 ms | 6.962 ms | 10.869 ms | 6.008 ms | 0.607 ms |
+| **Large** | 67.169 ms | 40.207 ms | 69.323 ms | 62.991 ms | 2.175 ms |
 
 ### Density Impact (Uniform vs. Variable/Power User)
-- Measures the performance impact of **variable interaction density** where a minority of "power users" have many more interactions (up to 10x) than regular users.
+- Measures the performance impact of **variable interaction density** where a minority of "power users" have many more interactions (up to 10x) than regular users, and how the `maxUserProfileSize` limits prevent bottlenecks.
 
 | Scale | Density Mode | Total Interactions | Latency Avg (Miss) | Latency P95 (Miss) |
 | :--- | :--- | :---: | :---: | :---: |
-| **Small** | uniform (10/user) | 10,000 | 0.702 ms | 1.458 ms |
-| **Small** | variable (power users) | 12,540 | 2.351 ms | 9.834 ms |
-| **Medium** | uniform (10/user) | 100,000 | 9.505 ms | 15.632 ms |
-| **Medium** | variable (power users) | 118,265 | 18.613 ms | 61.647 ms |
-| **Large** | uniform (10/user) | 1,000,000 | 64.089 ms | 82.615 ms |
-| **Large** | variable (power users) | 1,199,715 | 223.423 ms | 1,716.908 ms |
+| **Small** | uniform (10/user) | 10,000 | 0.751 ms | 1.827 ms |
+| **Small** | variable (power users) | 12,540 | 2.339 ms | 10.724 ms |
+| **Small** | variable (capped at 50) | 9,740 | 1.026 ms | 3.884 ms |
+| **Medium** | uniform (10/user) | 100,000 | 9.780 ms | 16.910 ms |
+| **Medium** | variable (power users) | 118,265 | 20.714 ms | 59.534 ms |
+| **Medium** | variable (capped at 50) | 94,415 | 12.931 ms | 39.005 ms |
+| **Large** | uniform (10/user) | 1,000,000 | 78.372 ms | 104.934 ms |
+| **Large** | variable (power users) | 1,199,715 | 287.387 ms | 2,267.936 ms |
+| **Large** | variable (capped at 50) | 950,315 | 129.940 ms | 587.896 ms |
 
 > [!WARNING]
-> **Power User Density Bottlenecks**:
-> In the Large scale dataset, moving from uniform density to a variable distribution (where 5% of users are power users with 100 interactions) causes the average query latency to increase to **223.42 ms** and the P95 latency to reach **1,716.91 ms**.
-> This is a known bottleneck of neighborhood methods: similarity calculations scale with the density of the user's vector and the size of their candidate items. In latency-sensitive production environments, it is highly recommended to **cap user profiles** (e.g. limit to the latest 50 interactions) or configure neighborhood boundaries (`k` limits and `minIntersectionSize`) to control latency.
+> **Power User Density Bottlenecks & Capping Solution**:
+> In the Large scale dataset, moving from uniform density to a variable distribution (where 5% of users are power users with up to 100 interactions) causes the average query latency to increase to **287.39 ms** and the P95 latency to reach **2,267.94 ms**.
+> 
+> This is a known bottleneck of neighborhood methods: similarity calculations scale with the density of the user's vector and the size of their candidate items. In latency-sensitive production environments, you can limit the user profile size using the `maxUserProfileSize` parameter. 
+> 
+> As demonstrated in the benchmark above, setting `maxUserProfileSize: 50` successfully reduced the average latency to **129.94 ms** and cut the P95 latency down to **587.90 ms** (a 4x latency improvement for power users).
+> 
+> ```typescript
+> const recommender = new NanoRecommender({
+>   maxUserProfileSize: 50, // Caps user profile history to latest 50 interactions (FIFO)
+> });
+> ```
 
 ---
 

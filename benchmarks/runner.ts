@@ -27,7 +27,7 @@ interface ScaleResult {
 
 interface DensityResult {
   readonly scale: string;
-  readonly densityMode: "uniform" | "variable";
+  readonly densityMode: "uniform" | "variable" | "variable (capped at 50)";
   readonly interactionsCount: number;
   readonly avgMs: number;
   readonly p95Ms: number;
@@ -102,7 +102,7 @@ function runScale(
   const heapBaseline = process.memoryUsage().heapUsed;
   const interactions = generateSyntheticData(numUsers, numItems, interactionsPerUser, "uniform");
 
-  const recommender = new NanoRecommender();
+  const recommender = new NanoRecommender({ wasmStrategy: "always" });
   
   // Measure loading
   const t0 = performance.now();
@@ -189,11 +189,16 @@ function runDensityBenchmark(
   recUniform.load(intUniform);
   const latUniform = benchmarkRecommendations(recUniform, sampleUserIds, "item-based");
 
-  // Variable
+  // Variable (uncapped)
   const intVariable = generateSyntheticData(numUsers, numItems, interactionsPerUser, "variable");
   const recVariable = new NanoRecommender();
   recVariable.load(intVariable);
   const latVariable = benchmarkRecommendations(recVariable, sampleUserIds, "item-based");
+
+  // Variable (capped at 50)
+  const recVariableCapped = new NanoRecommender({ maxUserProfileSize: 50 });
+  recVariableCapped.load(intVariable);
+  const latVariableCapped = benchmarkRecommendations(recVariableCapped, sampleUserIds, "item-based");
 
   return [
     {
@@ -209,6 +214,13 @@ function runDensityBenchmark(
       interactionsCount: intVariable.length,
       avgMs: latVariable.avgMs,
       p95Ms: latVariable.p95Ms,
+    },
+    {
+      scale: scaleName,
+      densityMode: "variable (capped at 50)",
+      interactionsCount: recVariableCapped.stats().interactionCount,
+      avgMs: latVariableCapped.avgMs,
+      p95Ms: latVariableCapped.p95Ms,
     },
   ];
 }
