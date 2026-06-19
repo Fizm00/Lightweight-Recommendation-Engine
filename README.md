@@ -64,7 +64,6 @@
 - [Contributing](#contributing)
 - [License](#license)
 
-
 ---
 
 ## Why nano-recommender
@@ -87,13 +86,13 @@ It is designed for use-cases requiring rapid collaborative filtering and fallbac
 
 When deciding on a recommendation library, it is helpful to position `nano-recommender` against other solutions in the ecosystem:
 
-| Aspect | `nano-recommender` | Heavy ML Pipelines (e.g., Python / TensorFlow) | SaaS Engines (e.g., Recombee) | NLP / Text Libraries (e.g., `natural`) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Dependencies** | **Zero** | Heavy native packages, python bindings | External REST/gRPC client SDK | Many text-processing utilities |
-| **Architecture** | **In-memory, Real-time** | Distributed clusters & servers | Cloud API dependency | Local utilities, not specialized for CF |
-| **Speed** | **Sub-millisecond / WASM** | High batch throughput, high latency | Network roundtrip latency | Moderate JS performance |
-| **Data Sparsity** | **High (via Sparse Matrix)** | Handles very dense / large matrices | Scales to billions of items | No built-in sparse CF structures |
-| **Developer Experience** | **Very high (Builder API, presets)**| Complex pipeline code | Simple SDK, external config | Generic algorithms, manual coding required |
+| Aspect                   | `nano-recommender`                   | Heavy ML Pipelines (e.g., Python / TensorFlow) | SaaS Engines (e.g., Recombee) | NLP / Text Libraries (e.g., `natural`)     |
+| :----------------------- | :----------------------------------- | :--------------------------------------------- | :---------------------------- | :----------------------------------------- |
+| **Dependencies**         | **Zero**                             | Heavy native packages, python bindings         | External REST/gRPC client SDK | Many text-processing utilities             |
+| **Architecture**         | **In-memory, Real-time**             | Distributed clusters & servers                 | Cloud API dependency          | Local utilities, not specialized for CF    |
+| **Speed**                | **Sub-millisecond / WASM**           | High batch throughput, high latency            | Network roundtrip latency     | Moderate JS performance                    |
+| **Data Sparsity**        | **High (via Sparse Matrix)**         | Handles very dense / large matrices            | Scales to billions of items   | No built-in sparse CF structures           |
+| **Developer Experience** | **Very high (Builder API, presets)** | Complex pipeline code                          | Simple SDK, external config   | Generic algorithms, manual coding required |
 
 Use `nano-recommender` when you need a fast, zero-dependency, in-memory collaborative filtering system that runs locally in Node.js or the browser, with real-time updates and seamless WebAssembly acceleration.
 
@@ -101,22 +100,22 @@ Use `nano-recommender` when you need a fast, zero-dependency, in-memory collabor
 
 ## Features
 
-| Feature                                     | Supported | Description                                                    |
-| :------------------------------------------ | :-------: | :------------------------------------------------------------- |
-| **WebAssembly Acceleration**                |    Yes    | Accelerates vector math calculations (Cosine, Jaccard, Pearson) using Rust |
-| **Item-Based Collaborative Filtering**      |    Yes    | Recommends items based on item-item similarity matrices        |
-| **User-Based Collaborative Filtering**      |    Yes    | Recommends items based on user-user similarity matrices        |
-| **K-Nearest Neighbors (KNN) Limit**         |    Yes    | Limits calculations to top K nearest neighbors for performance |
-| **Similarity Intersection Threshold**       |    Yes    | Avoids statistical coincidences by enforcing minimum overlap   |
-| **Custom Similarity Metrics**               |    Yes    | Built-in Cosine, Jaccard, and Pearson correlation coefficients |
-| **Custom Filtering & Blacklisting**         |    Yes    | Filters recommendations dynamically via callback or blacklist  |
-| **Real-Time Incremental Updates**           |    Yes    | Live interaction updates with selective cache invalidation     |
-| **Popularity Fallback Engine**              |    Yes    | Handles cold-start users using view, rate, and purchase counts |
-| **Time-Decay Weighting**                    |    Yes    | Automatically decays older interaction ratings exponentially   |
-| **Dynamic Interaction Weighting**           |    Yes    | Scales rating scores based on interaction types at load time   |
-| **LRU Similarity Cache**                    |    Yes    | Prevents memory bloat with configurable LRU eviction limits   |
-| **Sparse Storage Engine**                   |    Yes    | Operates entirely in memory with sparse indices                |
-| **TypeScript Ready**                        |    Yes    | Written in strict TypeScript with full declaration files       |
+| Feature                                | Supported | Description                                                                |
+| :------------------------------------- | :-------: | :------------------------------------------------------------------------- |
+| **WebAssembly Acceleration**           |    Yes    | Accelerates vector math calculations (Cosine, Jaccard, Pearson) using Rust |
+| **Item-Based Collaborative Filtering** |    Yes    | Recommends items based on item-item similarity matrices                    |
+| **User-Based Collaborative Filtering** |    Yes    | Recommends items based on user-user similarity matrices                    |
+| **K-Nearest Neighbors (KNN) Limit**    |    Yes    | Limits calculations to top K nearest neighbors for performance             |
+| **Similarity Intersection Threshold**  |    Yes    | Avoids statistical coincidences by enforcing minimum overlap               |
+| **Custom Similarity Metrics**          |    Yes    | Built-in Cosine, Jaccard, and Pearson correlation coefficients             |
+| **Custom Filtering & Blacklisting**    |    Yes    | Filters recommendations dynamically via callback or blacklist              |
+| **Real-Time Incremental Updates**      |    Yes    | Live interaction updates with selective cache invalidation                 |
+| **Popularity Fallback Engine**         |    Yes    | Handles cold-start users using view, rate, and purchase counts             |
+| **Time-Decay Weighting**               |    Yes    | Automatically decays older interaction ratings exponentially               |
+| **Dynamic Interaction Weighting**      |    Yes    | Scales rating scores based on interaction types at load time               |
+| **LRU Similarity Cache**               |    Yes    | Prevents memory bloat with configurable LRU eviction limits                |
+| **Sparse Storage Engine**              |    Yes    | Operates entirely in memory with sparse indices                            |
+| **TypeScript Ready**                   |    Yes    | Written in strict TypeScript with full declaration files                   |
 
 ---
 
@@ -142,11 +141,11 @@ yarn add @fizm/nano-recommender
 
 ### Compatibility Matrix
 
-| Environment | Minimum Supported Version | Recommended | Notes |
-| :--- | :---: | :---: | :--- |
-| **Node.js** | `>= 18.0.0` | `>= 20.0.0` | Required for structured clone and WebAssembly compatibility |
-| **Browsers** | Modern Browsers | Latest | Requires WebAssembly and `structuredClone()` support (for Workers) |
-| **TypeScript** | `>= 4.5.0` | `>= 5.0.0` | Compatible with strict null checking |
+| Environment    | Minimum Supported Version | Recommended | Notes                                                              |
+| :------------- | :-----------------------: | :---------: | :----------------------------------------------------------------- |
+| **Node.js**    |        `>= 18.0.0`        | `>= 20.0.0` | Required for structured clone and WebAssembly compatibility        |
+| **Browsers**   |      Modern Browsers      |   Latest    | Requires WebAssembly and `structuredClone()` support (for Workers) |
+| **TypeScript** |        `>= 4.5.0`         | `>= 5.0.0`  | Compatible with strict null checking                               |
 
 ---
 
@@ -193,13 +192,21 @@ The package supports both ESM and CommonJS formats.
 ### ESM Import (Default)
 
 ```typescript
-import { NanoRecommender, cosineSimilarity, pearsonCorrelation } from "@fizm/nano-recommender";
+import {
+  NanoRecommender,
+  cosineSimilarity,
+  pearsonCorrelation,
+} from "@fizm/nano-recommender";
 ```
 
 ### CommonJS Require
 
 ```javascript
-const { NanoRecommender, cosineSimilarity, pearsonCorrelation } = require("@fizm/nano-recommender");
+const {
+  NanoRecommender,
+  cosineSimilarity,
+  pearsonCorrelation,
+} = require("@fizm/nano-recommender");
 ```
 
 ---
@@ -209,6 +216,7 @@ const { NanoRecommender, cosineSimilarity, pearsonCorrelation } = require("@fizm
 The library contains a high-performance WebAssembly backend compiled from Rust using `wasm-bindgen`. It accelerates vector mathematics calculations (Cosine Similarity, Jaccard Similarity, and Pearson Correlation) on large-scale datasets while maintaining zero runtime dependencies.
 
 ### Features
+
 - **Zero-Dependency base64 Inlining**: The Wasm binary is encoded as a Base64 string and embedded directly inside the code (`wasm-binary.ts`). This allows it to run out of the box in both Node.js and browser environments without needing file system reads or network requests.
 - **Automatic Loading**: Instantiating `NanoRecommender` automatically triggers asynchronous loading of the Wasm module in the background. If the module is not yet loaded or if the environment doesn't support WebAssembly, the engine silently falls back to pure JavaScript/TypeScript calculations.
 - **Web Worker Compatibility**: The Wasm module is automatically pre-loaded when using the Web Worker API, providing asynchronous multithreaded recommendation queries fully accelerated by WebAssembly.
@@ -229,6 +237,7 @@ const recommender = new NanoRecommender({
 ```
 
 ### Manual Pre-loading (Optional)
+
 If you want to ensure WebAssembly is loaded and compiled before running any calculations, you can call the `loadWasm` helper:
 
 ```typescript
@@ -292,12 +301,23 @@ const recommender = new NanoRecommender({
 });
 
 recommender.load([
-  { userId: "u1", itemId: "i1", rating: 5.0, timestamp: "2026-06-12T00:00:00Z" },
-  { userId: "u1", itemId: "i2", rating: 5.0, timestamp: "2026-05-13T00:00:00Z" }, // ~30 days old -> scaled to 2.5
+  {
+    userId: "u1",
+    itemId: "i1",
+    rating: 5.0,
+    timestamp: "2026-06-12T00:00:00Z",
+  },
+  {
+    userId: "u1",
+    itemId: "i2",
+    rating: 5.0,
+    timestamp: "2026-05-13T00:00:00Z",
+  }, // ~30 days old -> scaled to 2.5
 ]);
 ```
 
 You can also supply a custom reference time:
+
 ```typescript
 recommender.load(dataset, { referenceTime: new Date("2026-06-12T00:00:00Z") });
 ```
@@ -313,8 +333,20 @@ When loading your dataset, you can attach an optional `itemCategory` and list of
 ```typescript
 // Load dataset with item metadata
 recommender.load([
-  { userId: "u1", itemId: "i1", rating: 5, itemCategory: "Book", itemTags: ["fantasy", "fiction"] },
-  { userId: "u1", itemId: "i2", rating: 4, itemCategory: "Movie", itemTags: ["sci-fi"] },
+  {
+    userId: "u1",
+    itemId: "i1",
+    rating: 5,
+    itemCategory: "Book",
+    itemTags: ["fantasy", "fiction"],
+  },
+  {
+    userId: "u1",
+    itemId: "i2",
+    rating: 4,
+    itemCategory: "Movie",
+    itemTags: ["sci-fi"],
+  },
 ]);
 
 // Filter recommendations for a specific category
@@ -340,7 +372,7 @@ const recs = recommender.recommend("user_id", {
     const isAdultOnly = checkAdultCategory(itemId);
     const isUserMinor = checkUserIsMinor("user_id");
     return !(isAdultOnly && isUserMinor);
-  }
+  },
 });
 ```
 
@@ -372,7 +404,7 @@ Recommends items similar to those the user has already interacted with based on 
 const recs = recommender.recommend("user_id", {
   strategy: "content-based",
   categoryWeight: 0.4, // 40% weight to category similarity
-  tagWeight: 0.6,      // 60% weight to tag Jaccard similarity
+  tagWeight: 0.6, // 60% weight to tag Jaccard similarity
 });
 ```
 
@@ -383,6 +415,7 @@ Combines personal collaborative filtering preferences with global popularity tre
 $$\text{Final Score} = \alpha \cdot \text{Normalized Base Score} + (1 - \alpha) \cdot \text{Normalized Secondary Score}$$
 
 #### Collaborative Filtering + Popularity Blending
+
 ```typescript
 const recs = recommender.recommend("user_id", {
   strategy: "hybrid",
@@ -393,6 +426,7 @@ const recs = recommender.recommend("user_id", {
 ```
 
 #### Collaborative Filtering + Content-Based Blending (Content-Aware Hybrid)
+
 ```typescript
 const recs = recommender.recommend("user_id", {
   strategy: "hybrid",
@@ -404,7 +438,7 @@ const recs = recommender.recommend("user_id", {
 
 ### 10. Explainable Recommendations
 
-To improve transparency and allow developers to display labels like *"Because you liked item X"* or *"Because similar user Y rated it Z"*, the engine can generate detailed explanation reasons when `explain: true` is passed:
+To improve transparency and allow developers to display labels like _"Because you liked item X"_ or _"Because similar user Y rated it Z"_, the engine can generate detailed explanation reasons when `explain: true` is passed:
 
 ```typescript
 const recs = recommender.recommend("user_id", {
@@ -431,6 +465,7 @@ Output:
 ```
 
 Depending on the active strategy, the `reasons` field will contain:
+
 - **Item-Based CF**: Triggers showing which previously-rated items (`triggerItemId`, `similarity`, and target user's `ratingGiven`) influenced the candidate's score.
 - **User-Based CF**: Triggers showing which similar users (`triggerUserId`, `similarity` with target user, and their `ratingGiven` for the candidate) influenced the prediction.
 - **Content-Based Filtering**: Triggers showing which items with similar content (`triggerItemId` and `similarity` match) influenced the prediction.
@@ -442,6 +477,7 @@ Depending on the active strategy, the `reasons` field will contain:
 Generate recommendations dynamically based on the chronological sequence of item interactions within an active session. This is ideal for e-commerce shopping carts or real-time anonymous browsing where long-term history is either absent or doesn't reflect the user's immediate intent.
 
 The engine supports two session recommendation strategies:
+
 - `"transition"`: Calculates transition probabilities between items using a simple Markov Chain model ($A \to B$) built from historical sequence data.
 - `"similarity"` (Default): Builds a pseudo-user profile from the active session, decays past items exponentially, and delegates to item-based or content-based similarity.
 
@@ -454,7 +490,7 @@ const cartItems = ["item_a", "item_b"];
 
 const recs = recommender.recommendSession(cartItems, {
   sessionStrategy: "transition", // 'transition' | 'similarity'
-  decayFactor: 0.5,             // Weights older session items lower exponentially
+  decayFactor: 0.5, // Weights older session items lower exponentially
   limit: 5,
   explain: true,
 });
@@ -488,9 +524,12 @@ The class `NanoRecommenderWorker` acts as an asynchronous facade to the Web Work
 
    const recommender = new NanoRecommenderWorker(
      new Worker(
-       new URL("@fizm/nano-recommender/dist/recommender.worker.js", import.meta.url),
-       { type: "module" }
-     )
+       new URL(
+         "@fizm/nano-recommender/dist/recommender.worker.js",
+         import.meta.url,
+       ),
+       { type: "module" },
+     ),
    );
    ```
 
@@ -513,7 +552,7 @@ The class `NanoRecommenderWorker` acts as an asynchronous facade to the Web Work
    ```
 
 > [!WARNING]
-   > Because Web Workers communicate via message passing using the structured clone algorithm, custom filter callback functions (`options.filter`) cannot be passed to `NanoRecommenderWorker`. Instead, perform post-filtering of the returned recommendations on the main thread.
+> Because Web Workers communicate via message passing using the structured clone algorithm, custom filter callback functions (`options.filter`) cannot be passed to `NanoRecommenderWorker`. Instead, perform post-filtering of the returned recommendations on the main thread.
 
 ## Offline Evaluation Suite
 
@@ -523,9 +562,9 @@ The library includes a built-in evaluation suite under the `evaluation` namespac
 
 You can split your interaction arrays into training and testing sets using one of three splitter functions:
 
-*   **`splitRandom(interactions, trainRatio)`**: Randomly splits interactions.
-*   **`splitTemporal(interactions, trainRatio)`**: Splits interactions chronologically based on timestamps.
-*   **`splitUserHoldout(interactions, trainRatio)`**: Groups interactions by user, shuffling and holding out a percentage of interactions for each user. This guarantees that test users have history in the training set.
+- **`splitRandom(interactions, trainRatio)`**: Randomly splits interactions.
+- **`splitTemporal(interactions, trainRatio)`**: Splits interactions chronologically based on timestamps.
+- **`splitUserHoldout(interactions, trainRatio)`**: Groups interactions by user, shuffling and holding out a percentage of interactions for each user. This guarantees that test users have history in the training set.
 
 ```typescript
 import { splitUserHoldout } from "@fizm/nano-recommender";
@@ -547,7 +586,7 @@ const results = evaluate(recommender, train, test, {
   strategyOptions: {
     strategy: "item-based",
     similarityThreshold: 0.1,
-  }
+  },
 });
 
 console.log(results);
@@ -576,7 +615,13 @@ You can compare the performance of multiple recommendation strategies directly o
 ```typescript
 import { compareStrategies } from "@fizm/nano-recommender";
 
-const results = compareStrategies(recommender, train, test, ["item-based", "user-based", "hybrid"], { topK: 10 });
+const results = compareStrategies(
+  recommender,
+  train,
+  test,
+  ["item-based", "user-based", "hybrid"],
+  { topK: 10 },
+);
 console.log(results["item-based"].ndcg);
 console.log(results["user-based"].ndcg);
 ```
@@ -588,14 +633,20 @@ You can run automated hyperparameter tuning using `tune` to search for the best 
 ```typescript
 import { tune } from "@fizm/nano-recommender";
 
-const tuningResult = tune(recommender, train, test, {
-  similarityThreshold: [0.0, 0.1, 0.2],
-  strategy: ["item-based", "user-based"],
-  k: [20, 50]
-}, {
-  metric: "ndcg", // Metric to optimize
-  topK: 10
-});
+const tuningResult = tune(
+  recommender,
+  train,
+  test,
+  {
+    similarityThreshold: [0.0, 0.1, 0.2],
+    strategy: ["item-based", "user-based"],
+    k: [20, 50],
+  },
+  {
+    metric: "ndcg", // Metric to optimize
+    topK: 10,
+  },
+);
 
 console.log(tuningResult.bestParameters); // e.g., { similarityThreshold: 0.1, strategy: "user-based", k: 50 }
 console.log(tuningResult.bestScore);
@@ -611,8 +662,8 @@ The library provides modern ergonomics and developer-friendly APIs designed for 
 
 Instead of configuring weights and strategies manually, you can initialize the recommender using domain-specific presets matching your business model:
 
-*   **`ecommerce`**: Optimizes for purchases, shopping carts, and views. Uses `hybrid` strategy by default with `most-purchased` fallbacks.
-*   **`media`**: Optimizes for watching and clicks, utilizing fast `item-based` CF with `most-viewed` fallbacks and a default 30-day time-decay half-life.
+- **`ecommerce`**: Optimizes for purchases, shopping carts, and views. Uses `hybrid` strategy by default with `most-purchased` fallbacks.
+- **`media`**: Optimizes for watching and clicks, utilizing fast `item-based` CF with `most-viewed` fallbacks and a default 30-day time-decay half-life.
 
 ```typescript
 import { NanoRecommender } from "@fizm/nano-recommender";
@@ -622,7 +673,7 @@ const recommender = new NanoRecommender("ecommerce");
 
 // Instantiate with overrides
 const mediaRecommender = NanoRecommender.fromPreset("media", {
-  defaultK: 50
+  defaultK: 50,
 });
 ```
 
@@ -631,7 +682,8 @@ const mediaRecommender = NanoRecommender.fromPreset("media", {
 You can construct recommendation queries fluently using method chaining, which improves code readability compared to passing deep options objects:
 
 ```typescript
-const recommendations = recommender.query("user_123")
+const recommendations = recommender
+  .query("user_123")
   .withStrategy("hybrid")
   .withLimit(5)
   .withSimilarityThreshold(0.1)
@@ -643,8 +695,10 @@ const recommendations = recommender.query("user_123")
 ```
 
 For session-based recommendations:
+
 ```typescript
-const recommendations = recommender.querySession(["item_1", "item_2"])
+const recommendations = recommender
+  .querySession(["item_1", "item_2"])
   .withLimit(3)
   .withSessionStrategy("similarity")
   .execute();
@@ -653,13 +707,14 @@ const recommendations = recommender.querySession(["item_1", "item_2"])
 ### Strategy Auto-routing
 
 Enabling the `"auto"` strategy allows the engine to route recommendations automatically based on the user's interaction profile:
+
 1. **Cold Start (0 interactions)**: Automatically routes to the configured fallback popularity engine.
 2. **Sparse Profile (1 to 4 interactions)**: Routes to `content-based` (if category/tag metadata is populated) or `hybrid` to bypass collaborative filtering sparsity limits.
 3. **Established Profile (5+ interactions)**: Routes to `user-based` if the user shows diverse interest across categories, or `item-based` if their history is category-focused.
 
 ```typescript
 const recommendations = recommender.recommend("user_123", {
-  strategy: "auto"
+  strategy: "auto",
 });
 ```
 
@@ -687,6 +742,7 @@ The library throws structured custom errors extending `RecommenderError` (which 
 - **`InvalidInteractionError`**: Thrown when loading interactions containing corrupt data (e.g. missing `userId`/`itemId`, `NaN` ratings, or invalid timestamps).
 
 #### Catching Errors Example
+
 ```typescript
 import { ValidationError, RecommenderError } from "@fizm/nano-recommender";
 
@@ -706,17 +762,23 @@ try {
 ## Design Rationale & Technical Trade-offs
 
 ### 1. Neighborhood Models vs. Latent Factors (SVD/ALS)
+
 Currently, all strategies in `nano-recommender` are neighborhood-based (Item-based/User-based Collaborative Filtering) and content-based.
+
 - **Trade-off**: Neighborhood-based algorithms shine in **zero-dependency, in-memory systems** where interactions are updated in real-time. We can perform selective cache invalidation and immediate incremental updates via `addInteraction(interaction)` in $O(K)$ time without having to retrain a heavy mathematical model.
 - **Roadmap**: Latent factor models like Matrix Factorization (SVD/ALS) are standard for offline training on dense matrices but are computationally expensive to update dynamically and require matrix algebra libraries. Supporting SVD/ALS as an offline-trained, static fallback/strategy is slated for **v3.0.0**.
 
 ### 2. In-Memory Limits vs. Streaming Pipelines
+
 The `load()` method loads the entire interaction dataset into Node.js heap memory using a sparse coordinate matrix format.
+
 - **Trade-off**: Memory footprint is optimized using integer ID mapping and avoiding dense matrices. A dataset of 1 million interactions occupies roughly **350 MB** of heap memory.
 - **Roadmap**: For large-scale production deployments containing tens of millions of interactions, loading all data at startup can cause heap limits to exceed. Implementing a streaming database adapter / pipeline loader is slated for the future roadmap.
 
 ### 3. Explanation Localization (i18n)
+
 By default, explanation strings generated when `explain: true` is enabled are returned in English.
+
 - **Solution**: The engine now natively supports a custom `explanationFormatter` callback in both the `NanoRecommender` constructor configurations and the query options (`RecommendationOptions`). This allows developers to translate, format, or customize explanation structures dynamically (e.g. for i18n localization) without pulling in heavy external translation libraries.
 
 ---
@@ -726,59 +788,63 @@ By default, explanation strings generated when `explain: true` is enabled are re
 The benchmark suite was run on synthetic datasets, measuring loading speed, memory footprint, and query latency (average and P95) for various strategies under WASM and JS Fallback modes.
 
 ### System Environment
+
 - **CPU**: 13th Gen Intel(R) Core(TM) i7-13700HX (24 cores)
-- **RAM**: 15.73 GB
+- **RAM**: 16 GB
 - **OS**: Windows_NT (x64, 10.0.26200)
 - **Node.js**: v24.15.0
 
 ### Loading & Memory Footprint
+
 - **Dataset specs**: Generated using deterministic LCG generator containing uniform 10 interactions per user.
 - **Cache behavior**: Memory delta measures heap allocation right after caching similarities for a sample of 100 users.
 
-| Scale | Users | Items | Interactions | Load Time | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 1,000 | 100 | 10,000 | 9.84 ms | 1,016,312 | 3.58 MB | 0.90 MB |
-| **Medium** | 10,000 | 1,000 | 100,000 | 62.42 ms | 1,601,976 | 35.16 MB | 31.48 MB |
-| **Large** | 100,000 | 5,000 | 1,000,000 | 1,236.78 ms | 808,554 | 348.98 MB | 167.85 MB |
+| Scale      |  Users  | Items | Interactions |  Load Time  | Load Rate (Ops/sec) | Heap Delta (Loaded) | Heap Delta (Cached) |
+| :--------- | :-----: | :---: | :----------: | :---------: | :-----------------: | :-----------------: | :-----------------: |
+| **Small**  |  1,000  |  100  |    10,000    |   9.84 ms   |      1,016,312      |       3.58 MB       |       0.90 MB       |
+| **Medium** | 10,000  | 1,000 |   100,000    |  62.42 ms   |      1,601,976      |      35.16 MB       |      31.48 MB       |
+| **Large**  | 100,000 | 5,000 |  1,000,000   | 1,236.78 ms |       808,554       |      348.98 MB      |      167.85 MB      |
 
 > [!NOTE]
 > **Cache Memory Footprint Anomaly Explanation**:
-> In the Medium scale, the cached heap delta (31.48 MB) is almost equal to the loaded delta (35.16 MB) because the 100-user sample queries touch a large fraction of the total possible item-item pairs for a small catalog of 1,000 items. 
+> In the Medium scale, the cached heap delta (31.48 MB) is almost equal to the loaded delta (35.16 MB) because the 100-user sample queries touch a large fraction of the total possible item-item pairs for a small catalog of 1,000 items.
 > In contrast, in the Large scale, the cached heap delta (167.85 MB) is relatively smaller compared to the loaded delta (348.98 MB) because a 100-user sample only touches a tiny fraction of the total possible pairwise similarities for a catalog of 5,000 items.
 
 ### Latency (Cache Hit vs. Miss - Item-Based CF)
+
 - Measures average and P95 recommendation query latencies with WASM Enabled.
 
-| Scale | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Hit Speedup |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 0.802 ms | 1.839 ms | 0.531 ms | 0.531 ms | 1.5x |
-| **Medium** | 10.938 ms | 19.924 ms | 3.935 ms | 3.935 ms | 2.8x |
-| **Large** | 67.169 ms | 91.227 ms | 10.753 ms | 10.753 ms | 6.2x |
+| Scale      | Cache-Miss Avg | Cache-Miss P95 | Cache-Hit Avg | Cache-Hit P95 | Hit Speedup |
+| :--------- | :------------: | :------------: | :-----------: | :-----------: | :---------: |
+| **Small**  |    0.802 ms    |    1.839 ms    |   0.531 ms    |   0.531 ms    |    1.5x     |
+| **Medium** |   10.938 ms    |   19.924 ms    |   3.935 ms    |   3.935 ms    |    2.8x     |
+| **Large**  |   67.169 ms    |   91.227 ms    |   10.753 ms   |   10.753 ms   |    6.2x     |
 
 > [!NOTE]
 > **Cache-Hit Avg & P95 Variance Explanation**:
 > Cache-Hit Avg and Cache-Hit P95 are identical in the benchmark results because cached similarities are retrieved via O(1) lookups in a JavaScript Map. This lookup has zero computational complexity and near-zero variance, causing the average and the 95th percentile response times to align exactly.
 
 ### WASM vs. JS Fallback Latency (Cache-Miss Avg)
+
 - Measures average recommendation query latency comparing WebAssembly (WASM) to JS/TS Fallback.
 
-| Scale | Strategy | JS Fallback (Avg) | WASM Enabled (Avg) | WASM Acceleration |
-| :--- | :--- | :---: | :---: | :---: |
-| **Small** | item-based | 0.950 ms | 0.802 ms | 1.18x |
-| **Small** | user-based | 1.827 ms | 1.594 ms | 1.15x |
-| **Small** | hybrid | 0.962 ms | 0.713 ms | 1.35x |
-| **Small** | content-based | 0.097 ms | 0.163 ms | 0.59x |
-| **Small** | session-based | 0.170 ms | 0.190 ms | 0.89x |
-| **Medium** | item-based | 21.507 ms | 10.938 ms | 1.97x |
-| **Medium** | user-based | 5.436 ms | 6.962 ms | 0.78x |
-| **Medium** | hybrid | 21.807 ms | 10.869 ms | 2.01x |
-| **Medium** | content-based | 6.014 ms | 6.008 ms | 1.00x |
-| **Medium** | session-based | 0.800 ms | 0.607 ms | 1.32x |
-| **Large** | item-based | 171.085 ms | 67.169 ms | 2.55x |
-| **Large** | user-based | 39.374 ms | 40.207 ms | 0.98x |
-| **Large** | hybrid | 204.015 ms | 69.323 ms | 2.94x |
-| **Large** | content-based | 75.781 ms | 62.991 ms | 1.20x |
-| **Large** | session-based | 2.201 ms | 2.175 ms | 1.01x |
+| Scale      | Strategy      | JS Fallback (Avg) | WASM Enabled (Avg) | WASM Acceleration |
+| :--------- | :------------ | :---------------: | :----------------: | :---------------: |
+| **Small**  | item-based    |     0.950 ms      |      0.802 ms      |       1.18x       |
+| **Small**  | user-based    |     1.827 ms      |      1.594 ms      |       1.15x       |
+| **Small**  | hybrid        |     0.962 ms      |      0.713 ms      |       1.35x       |
+| **Small**  | content-based |     0.097 ms      |      0.163 ms      |       0.59x       |
+| **Small**  | session-based |     0.170 ms      |      0.190 ms      |       0.89x       |
+| **Medium** | item-based    |     21.507 ms     |     10.938 ms      |       1.97x       |
+| **Medium** | user-based    |     5.436 ms      |      6.962 ms      |       0.78x       |
+| **Medium** | hybrid        |     21.807 ms     |     10.869 ms      |       2.01x       |
+| **Medium** | content-based |     6.014 ms      |      6.008 ms      |       1.00x       |
+| **Medium** | session-based |     0.800 ms      |      0.607 ms      |       1.32x       |
+| **Large**  | item-based    |    171.085 ms     |     67.169 ms      |       2.55x       |
+| **Large**  | user-based    |     39.374 ms     |     40.207 ms      |       0.98x       |
+| **Large**  | hybrid        |    204.015 ms     |     69.323 ms      |       2.94x       |
+| **Large**  | content-based |     75.781 ms     |     62.991 ms      |       1.20x       |
+| **Large**  | session-based |     2.201 ms      |      2.175 ms      |       1.01x       |
 
 > [!NOTE]
 > **WASM vs JS Fallback Benchmark Settings**:
@@ -786,37 +852,39 @@ The benchmark suite was run on synthetic datasets, measuring loading speed, memo
 > Under the default `"auto"` strategy (which has `wasmMinVectorSize = 20`), the engine automatically routes user-based CF on sparse arrays to the pure JS engine, bypassing the minor boundary marshalling overhead and avoiding the user-based CF slowdown.
 
 ### Multi-Strategy Latency (WASM Enabled)
+
 - Comparison of average latencies across all primary recommendation strategies.
 
-| Scale | Item-Based CF | User-Based CF | Hybrid Strategy | Content-Based | Session-Based |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Small** | 0.802 ms | 1.594 ms | 0.713 ms | 0.163 ms | 0.190 ms |
-| **Medium** | 10.938 ms | 6.962 ms | 10.869 ms | 6.008 ms | 0.607 ms |
-| **Large** | 67.169 ms | 40.207 ms | 69.323 ms | 62.991 ms | 2.175 ms |
+| Scale      | Item-Based CF | User-Based CF | Hybrid Strategy | Content-Based | Session-Based |
+| :--------- | :-----------: | :-----------: | :-------------: | :-----------: | :-----------: |
+| **Small**  |   0.802 ms    |   1.594 ms    |    0.713 ms     |   0.163 ms    |   0.190 ms    |
+| **Medium** |   10.938 ms   |   6.962 ms    |    10.869 ms    |   6.008 ms    |   0.607 ms    |
+| **Large**  |   67.169 ms   |   40.207 ms   |    69.323 ms    |   62.991 ms   |   2.175 ms    |
 
 ### Density Impact (Uniform vs. Variable/Power User)
+
 - Measures the performance impact of **variable interaction density** where a minority of "power users" have many more interactions (up to 10x) than regular users, and how the `maxUserProfileSize` limits prevent bottlenecks.
 
-| Scale | Density Mode | Total Interactions | Latency Avg (Miss) | Latency P95 (Miss) |
-| :--- | :--- | :---: | :---: | :---: |
-| **Small** | uniform (10/user) | 10,000 | 0.751 ms | 1.827 ms |
-| **Small** | variable (power users) | 12,540 | 2.339 ms | 10.724 ms |
-| **Small** | variable (capped at 50) | 9,740 | 1.026 ms | 3.884 ms |
-| **Medium** | uniform (10/user) | 100,000 | 9.780 ms | 16.910 ms |
-| **Medium** | variable (power users) | 118,265 | 20.714 ms | 59.534 ms |
-| **Medium** | variable (capped at 50) | 94,415 | 12.931 ms | 39.005 ms |
-| **Large** | uniform (10/user) | 1,000,000 | 78.372 ms | 104.934 ms |
-| **Large** | variable (power users) | 1,199,715 | 287.387 ms | 2,267.936 ms |
-| **Large** | variable (capped at 50) | 950,315 | 129.940 ms | 587.896 ms |
+| Scale      | Density Mode            | Total Interactions | Latency Avg (Miss) | Latency P95 (Miss) |
+| :--------- | :---------------------- | :----------------: | :----------------: | :----------------: |
+| **Small**  | uniform (10/user)       |       10,000       |      0.751 ms      |      1.827 ms      |
+| **Small**  | variable (power users)  |       12,540       |      2.339 ms      |     10.724 ms      |
+| **Small**  | variable (capped at 50) |       9,740        |      1.026 ms      |      3.884 ms      |
+| **Medium** | uniform (10/user)       |      100,000       |      9.780 ms      |     16.910 ms      |
+| **Medium** | variable (power users)  |      118,265       |     20.714 ms      |     59.534 ms      |
+| **Medium** | variable (capped at 50) |       94,415       |     12.931 ms      |     39.005 ms      |
+| **Large**  | uniform (10/user)       |     1,000,000      |     78.372 ms      |     104.934 ms     |
+| **Large**  | variable (power users)  |     1,199,715      |     287.387 ms     |    2,267.936 ms    |
+| **Large**  | variable (capped at 50) |      950,315       |     129.940 ms     |     587.896 ms     |
 
 > [!WARNING]
 > **Power User Density Bottlenecks & Capping Solution**:
 > In the Large scale dataset, moving from uniform density to a variable distribution (where 5% of users are power users with up to 100 interactions) causes the average query latency to increase to **287.39 ms** and the P95 latency to reach **2,267.94 ms**.
-> 
-> This is a known bottleneck of neighborhood methods: similarity calculations scale with the density of the user's vector and the size of their candidate items. In latency-sensitive production environments, you can limit the user profile size using the `maxUserProfileSize` parameter. 
-> 
+>
+> This is a known bottleneck of neighborhood methods: similarity calculations scale with the density of the user's vector and the size of their candidate items. In latency-sensitive production environments, you can limit the user profile size using the `maxUserProfileSize` parameter.
+>
 > As demonstrated in the benchmark above, setting `maxUserProfileSize: 50` successfully reduced the average latency to **129.94 ms** and cut the P95 latency down to **587.90 ms** (a 4x latency improvement for power users).
-> 
+>
 > ```typescript
 > const recommender = new NanoRecommender({
 >   maxUserProfileSize: 50, // Caps user profile history to latest 50 interactions (FIFO)
@@ -824,7 +892,6 @@ The benchmark suite was run on synthetic datasets, measuring loading speed, memo
 > ```
 
 ---
-
 
 ## API Reference
 
@@ -834,22 +901,22 @@ The benchmark suite was run on synthetic datasets, measuring loading speed, memo
 
 Instantiates the recommendation engine facade.
 
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `defaultStrategy` | `"item-based" \| "user-based" \| "hybrid"` | `"item-based"` | The default strategy to use in the `recommend()` method. |
-| `defaultSimilarityThreshold` | `number` | `0.0` | The default similarity threshold score between entities. |
-| `defaultMinIntersectionSize` | `number` | `1` | The default minimum number of shared items/users required to compute similarity. |
-| `defaultK` | `number` | `undefined` | The default neighborhood limit (K) to use in recommendation calculations. |
-| `defaultFallbackStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `"most-rated"` | The default fallback strategy for cold start users. |
-| `interactionWeights` | `Record<string, number>` | `undefined` | Optional mapping of interaction types to positive rating multipliers. |
-| `decayHalfLifeDays` | `number` | `undefined` | Optional half-life in days for exponential time-decay weighting. |
-| `maxSimilarityCacheSize` | `number` | `undefined` | Optional capacity limit for similarity cache (LRU eviction). |
-| `defaultHybridAlpha` | `number` | `0.5` | The default weighting parameter alpha for hybrid strategy. Must be between 0.0 and 1.0. |
-| `defaultExplain` | `boolean` | `false` | The default explain option to include reasons in recommendation results. |
-| `maxUserProfileSize` | `number` | `undefined` | Optional maximum user profile size limit. If exceeded, the oldest interaction is evicted (FIFO). |
-| `wasmStrategy` | `"auto" \| "always" \| "never"` | `"auto"` | WebAssembly execution strategy. `'auto'` falls back to pure JS/TS below a vector size threshold to avoid boundary overhead. |
-| `wasmMinVectorSize` | `number` | `20` | Minimum vector size threshold for WASM auto routing. |
-| `explanationFormatter` | `ExplanationFormatter` | `undefined` | Optional custom formatter function to format or localize recommendation explanations (i18n). |
+| Parameter                    | Type                                                          | Default        | Description                                                                                                                 |
+| :--------------------------- | :------------------------------------------------------------ | :------------- | :-------------------------------------------------------------------------------------------------------------------------- |
+| `defaultStrategy`            | `"item-based" \| "user-based" \| "hybrid"`                    | `"item-based"` | The default strategy to use in the `recommend()` method.                                                                    |
+| `defaultSimilarityThreshold` | `number`                                                      | `0.0`          | The default similarity threshold score between entities.                                                                    |
+| `defaultMinIntersectionSize` | `number`                                                      | `1`            | The default minimum number of shared items/users required to compute similarity.                                            |
+| `defaultK`                   | `number`                                                      | `undefined`    | The default neighborhood limit (K) to use in recommendation calculations.                                                   |
+| `defaultFallbackStrategy`    | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `"most-rated"` | The default fallback strategy for cold start users.                                                                         |
+| `interactionWeights`         | `Record<string, number>`                                      | `undefined`    | Optional mapping of interaction types to positive rating multipliers.                                                       |
+| `decayHalfLifeDays`          | `number`                                                      | `undefined`    | Optional half-life in days for exponential time-decay weighting.                                                            |
+| `maxSimilarityCacheSize`     | `number`                                                      | `undefined`    | Optional capacity limit for similarity cache (LRU eviction).                                                                |
+| `defaultHybridAlpha`         | `number`                                                      | `0.5`          | The default weighting parameter alpha for hybrid strategy. Must be between 0.0 and 1.0.                                     |
+| `defaultExplain`             | `boolean`                                                     | `false`        | The default explain option to include reasons in recommendation results.                                                    |
+| `maxUserProfileSize`         | `number`                                                      | `undefined`    | Optional maximum user profile size limit. If exceeded, the oldest interaction is evicted (FIFO).                            |
+| `wasmStrategy`               | `"auto" \| "always" \| "never"`                               | `"auto"`       | WebAssembly execution strategy. `'auto'` falls back to pure JS/TS below a vector size threshold to avoid boundary overhead. |
+| `wasmMinVectorSize`          | `number`                                                      | `20`           | Minimum vector size threshold for WASM auto routing.                                                                        |
+| `explanationFormatter`       | `ExplanationFormatter`                                        | `undefined`    | Optional custom formatter function to format or localize recommendation explanations (i18n).                                |
 
 #### `load(interactions: Interaction[], options?: { referenceTime?: number | string | Date }): void`
 
@@ -863,46 +930,46 @@ Adds or updates a single user-item interaction in real-time. Automatically appli
 
 Generates recommendation array for a user. Automatically delegates to the selected strategy, falling back to popularity engine if the user has no history.
 
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `strategy` | `"item-based" \| "user-based" \| "hybrid"` | `defaultStrategy` | The recommendation strategy to use. |
-| `limit` | `number` | `10` | Maximum number of recommendations to return. |
-| `similarityThreshold` | `number` | `defaultSimilarityThreshold` | Minimum similarity score required between entities. |
-| `minIntersectionSize` | `number` | `defaultMinIntersectionSize` | Minimum number of shared items/users required to compute similarity. |
-| `k` | `number` | `defaultK` | Limit the similarity calculation to the top K nearest neighbors. |
-| `excludeInteracted` | `boolean` | `true` | Whether to exclude items the user has already rated/interacted with. |
-| `fallbackStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `defaultFallbackStrategy` | Fallback strategy for cold start users. |
-| `excludeItemIds` | `string[]` | `undefined` | Optional array of item IDs to blacklist/exclude. |
-| `filter` | `(itemId: string) => boolean` | `undefined` | Optional custom callback to dynamically filter item recommendations. |
-| `filterCategory` | `string` | `undefined` | Optional category classification to filter recommendations by. |
-| `filterTags` | `string[]` | `undefined` | Optional tags array to filter recommendations by (matches items with at least one tag). |
-| `hybridAlpha` | `number` | `defaultHybridAlpha` | Weighting parameter alpha for hybrid strategy (0.0 to 1.0). |
-| `hybridBaseStrategy` | `"item-based" \| "user-based"` | `defaultStrategy` (or `item-based`) | Collaborative filtering base strategy for hybrid. |
-| `hybridPopularityStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased"` | `defaultFallbackStrategy` (or `most-rated`) | Popularity strategy for hybrid. |
-| `explain` | `boolean` | `defaultExplain` | Whether to include explanation reasons for the recommendations. |
-| `useSession` | `boolean` | `false` | Whether to automatically detect and use the user's chronological interaction session. |
-| `sessionStrategy` | `"transition" \| "similarity"` | `"similarity"` | The strategy mode for session-based recommendation. |
-| `decayFactor` | `number` | `0.5` | Decay factor for positional items weighting. |
-| `similarityStrategy` | `"item-based" \| "content-based"` | `"item-based"` | The similarity strategy to use when session strategy is `"similarity"`. |
-| `explanationFormatter` | `ExplanationFormatter` | `explanationFormatter` (default) | Optional custom formatter function to format or translate explanations (i18n). |
+| Option                     | Type                                                          | Default                                     | Description                                                                             |
+| :------------------------- | :------------------------------------------------------------ | :------------------------------------------ | :-------------------------------------------------------------------------------------- |
+| `strategy`                 | `"item-based" \| "user-based" \| "hybrid"`                    | `defaultStrategy`                           | The recommendation strategy to use.                                                     |
+| `limit`                    | `number`                                                      | `10`                                        | Maximum number of recommendations to return.                                            |
+| `similarityThreshold`      | `number`                                                      | `defaultSimilarityThreshold`                | Minimum similarity score required between entities.                                     |
+| `minIntersectionSize`      | `number`                                                      | `defaultMinIntersectionSize`                | Minimum number of shared items/users required to compute similarity.                    |
+| `k`                        | `number`                                                      | `defaultK`                                  | Limit the similarity calculation to the top K nearest neighbors.                        |
+| `excludeInteracted`        | `boolean`                                                     | `true`                                      | Whether to exclude items the user has already rated/interacted with.                    |
+| `fallbackStrategy`         | `"most-rated" \| "most-viewed" \| "most-purchased" \| "none"` | `defaultFallbackStrategy`                   | Fallback strategy for cold start users.                                                 |
+| `excludeItemIds`           | `string[]`                                                    | `undefined`                                 | Optional array of item IDs to blacklist/exclude.                                        |
+| `filter`                   | `(itemId: string) => boolean`                                 | `undefined`                                 | Optional custom callback to dynamically filter item recommendations.                    |
+| `filterCategory`           | `string`                                                      | `undefined`                                 | Optional category classification to filter recommendations by.                          |
+| `filterTags`               | `string[]`                                                    | `undefined`                                 | Optional tags array to filter recommendations by (matches items with at least one tag). |
+| `hybridAlpha`              | `number`                                                      | `defaultHybridAlpha`                        | Weighting parameter alpha for hybrid strategy (0.0 to 1.0).                             |
+| `hybridBaseStrategy`       | `"item-based" \| "user-based"`                                | `defaultStrategy` (or `item-based`)         | Collaborative filtering base strategy for hybrid.                                       |
+| `hybridPopularityStrategy` | `"most-rated" \| "most-viewed" \| "most-purchased"`           | `defaultFallbackStrategy` (or `most-rated`) | Popularity strategy for hybrid.                                                         |
+| `explain`                  | `boolean`                                                     | `defaultExplain`                            | Whether to include explanation reasons for the recommendations.                         |
+| `useSession`               | `boolean`                                                     | `false`                                     | Whether to automatically detect and use the user's chronological interaction session.   |
+| `sessionStrategy`          | `"transition" \| "similarity"`                                | `"similarity"`                              | The strategy mode for session-based recommendation.                                     |
+| `decayFactor`              | `number`                                                      | `0.5`                                       | Decay factor for positional items weighting.                                            |
+| `similarityStrategy`       | `"item-based" \| "content-based"`                             | `"item-based"`                              | The similarity strategy to use when session strategy is `"similarity"`.                 |
+| `explanationFormatter`     | `ExplanationFormatter`                                        | `explanationFormatter` (default)            | Optional custom formatter function to format or translate explanations (i18n).          |
 
 #### `recommendSession(sessionItemIds: string[], options?: SessionRecommendationOptions): Recommendation[]`
 
 Generates recommendations based on the items in the current active session (e.g., anonymous browsing or cart items).
 
-| Option | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `sessionStrategy` | `"transition" \| "similarity"` | `"similarity"` | The strategy mode for session-based recommendation. |
-| `decayFactor` | `number` | `0.5` | Decay factor for positional items (older items get decayed by `decayFactor^(N-1-j)`). |
-| `limit` | `number` | `10` | Maximum number of recommendations to return. |
-| `explain` | `boolean` | `defaultExplain` | Whether to include explanation reasons for the recommendations. |
-| `filterCategory` | `string` | `undefined` | Optional category classification to filter recommendations by. |
-| `filterTags` | `string[]` | `undefined` | Optional tags array to filter recommendations by. |
-| `similarityStrategy` | `"item-based" \| "content-based"` | `"item-based"` | The similarity strategy to delegate to. |
-| `similarityThreshold` | `number` | `defaultSimilarityThreshold` | Minimum similarity score required. |
-| `minIntersectionSize` | `number` | `defaultMinIntersectionSize` | Minimum number of shared interactions. |
-| `k` | `number` | `defaultK` | Top K neighborhood limit for similarity. |
-| `explanationFormatter` | `ExplanationFormatter` | `explanationFormatter` (default) | Optional custom formatter function to format or translate explanations (i18n). |
+| Option                 | Type                              | Default                          | Description                                                                           |
+| :--------------------- | :-------------------------------- | :------------------------------- | :------------------------------------------------------------------------------------ |
+| `sessionStrategy`      | `"transition" \| "similarity"`    | `"similarity"`                   | The strategy mode for session-based recommendation.                                   |
+| `decayFactor`          | `number`                          | `0.5`                            | Decay factor for positional items (older items get decayed by `decayFactor^(N-1-j)`). |
+| `limit`                | `number`                          | `10`                             | Maximum number of recommendations to return.                                          |
+| `explain`              | `boolean`                         | `defaultExplain`                 | Whether to include explanation reasons for the recommendations.                       |
+| `filterCategory`       | `string`                          | `undefined`                      | Optional category classification to filter recommendations by.                        |
+| `filterTags`           | `string[]`                        | `undefined`                      | Optional tags array to filter recommendations by.                                     |
+| `similarityStrategy`   | `"item-based" \| "content-based"` | `"item-based"`                   | The similarity strategy to delegate to.                                               |
+| `similarityThreshold`  | `number`                          | `defaultSimilarityThreshold`     | Minimum similarity score required.                                                    |
+| `minIntersectionSize`  | `number`                          | `defaultMinIntersectionSize`     | Minimum number of shared interactions.                                                |
+| `k`                    | `number`                          | `defaultK`                       | Top K neighborhood limit for similarity.                                              |
+| `explanationFormatter` | `ExplanationFormatter`            | `explanationFormatter` (default) | Optional custom formatter function to format or translate explanations (i18n).        |
 
 #### `recommendItemBased(userId: string, options?: ItemBasedRecommendationOptions): Recommendation[]`
 
@@ -942,46 +1009,46 @@ Restores the recommender engine state from a serialized state object. Automatica
 
 Represents a single user-item interaction event.
 
-| Property | Type | Required | Description |
-| :--- | :--- | :---: | :--- |
-| `userId` | `string` | Yes | Unique identifier of the user. |
-| `itemId` | `string` | Yes | Unique identifier of the item. |
-| `rating` | `number` | Yes | Numeric rating, weight, or score for the interaction. |
-| `type` | `string` | No | Type of interaction (e.g. `'view'`, `'rate'`, `'purchase'`). Used for weighting and fallback popularity strategy. |
-| `timestamp` | `number \| string \| Date` | No | Optional timestamp of when the interaction occurred. Used for exponential time-decay. |
-| `itemCategory` | `string` | No | Optional category classification of the item. Used for built-in filtering. |
-| `itemTags` | `string[]` | No | Optional descriptive tags/keywords of the item. Used for built-in filtering. |
+| Property       | Type                       | Required | Description                                                                                                       |
+| :------------- | :------------------------- | :------: | :---------------------------------------------------------------------------------------------------------------- |
+| `userId`       | `string`                   |   Yes    | Unique identifier of the user.                                                                                    |
+| `itemId`       | `string`                   |   Yes    | Unique identifier of the item.                                                                                    |
+| `rating`       | `number`                   |   Yes    | Numeric rating, weight, or score for the interaction.                                                             |
+| `type`         | `string`                   |    No    | Type of interaction (e.g. `'view'`, `'rate'`, `'purchase'`). Used for weighting and fallback popularity strategy. |
+| `timestamp`    | `number \| string \| Date` |    No    | Optional timestamp of when the interaction occurred. Used for exponential time-decay.                             |
+| `itemCategory` | `string`                   |    No    | Optional category classification of the item. Used for built-in filtering.                                        |
+| `itemTags`     | `string[]`                 |    No    | Optional descriptive tags/keywords of the item. Used for built-in filtering.                                      |
 
 #### `interface Recommendation`
 
 Represents a single item recommendation result.
 
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `itemId` | `string` | Unique identifier of the recommended item. |
-| `score` | `number` | Calculated recommendation score (higher scores represent better/stronger recommendations). |
-| `reasons` | `RecommendationReason[]` | Optional explanation reasons detailing why this recommendation was generated. |
+| Property  | Type                     | Description                                                                                |
+| :-------- | :----------------------- | :----------------------------------------------------------------------------------------- |
+| `itemId`  | `string`                 | Unique identifier of the recommended item.                                                 |
+| `score`   | `number`                 | Calculated recommendation score (higher scores represent better/stronger recommendations). |
+| `reasons` | `RecommendationReason[]` | Optional explanation reasons detailing why this recommendation was generated.              |
 
 #### `interface RecommendationReason`
 
 Represents the explanation reason behind a generated recommendation.
 
-| Property | Type | Description |
-| :--- | :--- | :--- |
+| Property        | Type     | Description                                                          |
+| :-------------- | :------- | :------------------------------------------------------------------- |
 | `triggerItemId` | `string` | Optional item ID that triggered this recommendation (Item-Based CF). |
 | `triggerUserId` | `string` | Optional user ID that triggered this recommendation (User-Based CF). |
-| `similarity` | `number` | Similarity score between the target and the trigger entity. |
-| `ratingGiven` | `number` | Numeric rating value given to/by the trigger entity. |
-| `explanation` | `string` | Plain English description of the recommendation reason. |
+| `similarity`    | `number` | Similarity score between the target and the trigger entity.          |
+| `ratingGiven`   | `number` | Numeric rating value given to/by the trigger entity.                 |
+| `explanation`   | `string` | Plain English description of the recommendation reason.              |
 
 #### `interface RecommenderState`
 
 Represents the complete serialized state of the engine.
 
-| Property | Type | Description |
-| :--- | :--- | :--- |
-| `version` | `string` | Serialization schema version (currently `"1"`). |
-| `matrix` | `SerializedMatrixState` | The serialized sparse matrix and item popularity indices. |
+| Property  | Type                    | Description                                               |
+| :-------- | :---------------------- | :-------------------------------------------------------- |
+| `version` | `string`                | Serialization schema version (currently `"1"`).           |
+| `matrix`  | `SerializedMatrixState` | The serialized sparse matrix and item popularity indices. |
 
 ### Similarity Functions
 
