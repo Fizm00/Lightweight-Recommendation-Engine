@@ -94,6 +94,7 @@ export function recommendSessionTransition<TUser extends string | number = strin
         triggerItemId: t.triggerItemId,
         similarity: t.probability,
         explanation: `Because it frequently follows item ${String(t.triggerItemId)} in shopping patterns`,
+        strategy: "session-transition",
       }));
     }
 
@@ -184,6 +185,7 @@ export function recommendSessionSimilarity<TUser extends string | number = strin
         const reasons = rec.reasons.map(reason => ({
           ...reason,
           explanation: `Because it is similar to item ${String(reason.triggerItemId)} in your current session`,
+          strategy: "session-similarity",
         }));
         return { ...rec, reasons };
       }

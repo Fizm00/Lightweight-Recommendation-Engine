@@ -6,7 +6,8 @@ import type {
   RecommenderState,
   SessionRecommendationOptions,
   GenericRecommendation,
-  GenericRecommendationReason
+  GenericRecommendationReason,
+  ExplanationFormatter
 } from "./types/index.js";
 import {
   type ItemBasedRecommendationOptions,
@@ -25,7 +26,7 @@ import { getMostRated, getMostViewed, getMostPurchased } from "./algorithms/popu
 import { SimilarityCache } from "./core/cache.js";
 import { ValidationError } from "./errors/index.js";
 import { sortAndLimit } from "./utils/matrix-utils.js";
-import { loadWasm } from "./wasm/loader.js";
+import { loadWasm, setWasmStrategy, setWasmMinVectorSize } from "./wasm/loader.js";
 
 /**
  * Configuration options for the NanoRecommender engine.
@@ -55,6 +56,14 @@ export interface NanoRecommenderConfig {
   readonly defaultContentCategoryWeight?: number;
   /** The default tag weight for content-based similarity. Optional. Defaults to 0.5. */
   readonly defaultContentTagWeight?: number;
+  /** Optional maximum user profile size for capping. Must be a positive integer. */
+  readonly maxUserProfileSize?: number;
+  /** Strategy for WebAssembly usage: 'auto', 'always', or 'never'. Defaults to 'auto'. */
+  readonly wasmStrategy?: "auto" | "always" | "never";
+  /** Crossover minimum vector size for WASM auto strategy. Defaults to 20. */
+  readonly wasmMinVectorSize?: number;
+  /** Optional custom explanation formatter function. */
+  readonly explanationFormatter?: ExplanationFormatter;
 }
 
 /**
@@ -93,6 +102,8 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
   readonly decayFactor?: number;
   /** The similarity strategy to delegate to if using 'similarity' session strategy. Optional. */
   readonly similarityStrategy?: "item-based" | "content-based";
+  /** Optional custom explanation formatter function. */
+  readonly explanationFormatter?: ExplanationFormatter;
 }
 
 /**
@@ -135,7 +146,7 @@ export const PRESETS = {
  * for loading datasets and running recommendation queries without exposing internals.
  */
 export class NanoRecommender {
-  private readonly matrix = new SparseMatrix<number, number>({ useIntegerMapping: true });
+  private readonly matrix: SparseMatrix<number, number>;
 
   private readonly itemCache: SimilarityCache;
   private readonly userCache: SimilarityCache;
@@ -155,6 +166,11 @@ export class NanoRecommender {
   private lastItemMinIntersectionSize: number | undefined;
   private lastUserMinIntersectionSize: number | undefined;
 
+  private readonly maxUserProfileSize: number | undefined;
+  private readonly wasmStrategy: "auto" | "always" | "never";
+  private readonly wasmMinVectorSize: number;
+  private readonly explanationFormatter: ExplanationFormatter | undefined;
+
   /**
    * Constructs a new NanoRecommender instance.
    *
@@ -171,6 +187,57 @@ export class NanoRecommender {
     } else {
       finalConfig = config;
     }
+
+    // Parse and validate maxUserProfileSize
+    let maxProfileSize: number | undefined;
+    if (finalConfig.maxUserProfileSize !== undefined) {
+      if (
+        typeof finalConfig.maxUserProfileSize !== "number" ||
+        Number.isNaN(finalConfig.maxUserProfileSize) ||
+        !Number.isFinite(finalConfig.maxUserProfileSize) ||
+        !Number.isInteger(finalConfig.maxUserProfileSize) ||
+        finalConfig.maxUserProfileSize <= 0
+      ) {
+        throw new ValidationError("maxUserProfileSize must be a positive integer");
+      }
+      maxProfileSize = finalConfig.maxUserProfileSize;
+    }
+    this.maxUserProfileSize = maxProfileSize;
+
+    // Parse and validate wasmStrategy
+    this.wasmStrategy = finalConfig.wasmStrategy ?? "auto";
+    if (finalConfig.wasmStrategy !== undefined) {
+      if (finalConfig.wasmStrategy !== "auto" && finalConfig.wasmStrategy !== "always" && finalConfig.wasmStrategy !== "never") {
+        throw new ValidationError("wasmStrategy must be 'auto', 'always', or 'never'");
+      }
+      setWasmStrategy(finalConfig.wasmStrategy);
+    }
+
+    // Parse and validate wasmMinVectorSize
+    this.wasmMinVectorSize = finalConfig.wasmMinVectorSize ?? 20;
+    if (finalConfig.wasmMinVectorSize !== undefined) {
+      if (
+        typeof finalConfig.wasmMinVectorSize !== "number" ||
+        Number.isNaN(finalConfig.wasmMinVectorSize) ||
+        !Number.isFinite(finalConfig.wasmMinVectorSize) ||
+        !Number.isInteger(finalConfig.wasmMinVectorSize) ||
+        finalConfig.wasmMinVectorSize < 0
+      ) {
+        throw new ValidationError("wasmMinVectorSize must be a non-negative integer");
+      }
+      setWasmMinVectorSize(finalConfig.wasmMinVectorSize);
+    }
+
+    // Parse and validate explanationFormatter
+    if (finalConfig.explanationFormatter !== undefined && typeof finalConfig.explanationFormatter !== "function") {
+      throw new ValidationError("explanationFormatter must be a function");
+    }
+    this.explanationFormatter = finalConfig.explanationFormatter;
+
+    this.matrix = new SparseMatrix<number, number>({
+      useIntegerMapping: true,
+      maxUserProfileSize: this.maxUserProfileSize,
+    });
 
     this.defaultStrategy = finalConfig.defaultStrategy ?? "item-based";
     this.defaultThreshold = finalConfig.defaultSimilarityThreshold ?? 0.0;
@@ -408,7 +475,11 @@ export class NanoRecommender {
     return extracted;
   }
 
-  private mapRecommendationsToOriginal(recs: GenericRecommendation<number, number>[], explain?: boolean): Recommendation[] {
+  private mapRecommendationsToOriginal(
+    recs: GenericRecommendation<number, number>[],
+    explain?: boolean,
+    formatter?: ExplanationFormatter
+  ): Recommendation[] {
     return recs.map(rec => {
       const originalItemId = this.matrix.getOriginalItemId(rec.itemId);
       if (originalItemId === undefined) {
@@ -421,6 +492,7 @@ export class NanoRecommender {
           const res: any = {
             similarity: reason.similarity,
             explanation: reason.explanation,
+            strategy: reason.strategy,
           };
           if (reason.triggerItemId !== undefined) {
             const mappedItem = this.matrix.getOriginalItemId(reason.triggerItemId);
@@ -438,6 +510,9 @@ export class NanoRecommender {
           }
           if (reason.ratingGiven !== undefined) {
             res.ratingGiven = reason.ratingGiven;
+          }
+          if (formatter) {
+            res.explanation = formatter(res);
           }
           return res;
         });
@@ -652,10 +727,11 @@ export class NanoRecommender {
         if (options.similarityThreshold !== undefined) sessionOptions.similarityThreshold = options.similarityThreshold;
         if (options.minIntersectionSize !== undefined) sessionOptions.minIntersectionSize = options.minIntersectionSize;
         if (options.k !== undefined) sessionOptions.k = options.k;
+        if (options.explanationFormatter !== undefined) sessionOptions.explanationFormatter = options.explanationFormatter;
 
         const mappedSessionItemIds = sessionItemIds.map(id => this.matrix.lookupInternalItem(id));
         const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, sessionOptions);
-        return this.mapRecommendationsToOriginal(internalRecs, explain);
+        return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
       }
     }
 
@@ -721,7 +797,7 @@ export class NanoRecommender {
       internalRecs = this.recommendItemBasedInternal(uIdx, cleanMapped);
     }
 
-    return this.mapRecommendationsToOriginal(internalRecs, explain);
+    return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   /**
@@ -908,7 +984,7 @@ export class NanoRecommender {
     }
 
     const internalRecs = this.recommendHybridInternal(uIdx, options);
-    return this.mapRecommendationsToOriginal(internalRecs, explain);
+    return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   /**
@@ -930,7 +1006,7 @@ export class NanoRecommender {
     } else {
       return [];
     }
-    return this.mapRecommendationsToOriginal(internalRecs, options.explain);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   private recommendItemBasedInternal(
@@ -980,7 +1056,7 @@ export class NanoRecommender {
     const mapped = this.mapOptionsFilters(options);
     const cleanMapped = this.extractItemBasedOptions(mapped);
     const internalRecs = this.recommendItemBasedInternal(uIdx, cleanMapped);
-    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   private recommendUserBasedInternal(
@@ -1030,7 +1106,7 @@ export class NanoRecommender {
     const mapped = this.mapOptionsFilters(options);
     const cleanMapped = this.extractUserBasedOptions(mapped);
     const internalRecs = this.recommendUserBasedInternal(uIdx, cleanMapped);
-    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain);
+    return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   private recommendContentBasedInternal(
@@ -1106,7 +1182,7 @@ export class NanoRecommender {
       ...mapped,
     });
     const internalRecs = this.recommendContentBasedInternal(uIdx, cleanMapped);
-    return this.mapRecommendationsToOriginal(internalRecs, explain);
+    return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   private recommendSessionInternal(
@@ -1183,7 +1259,7 @@ export class NanoRecommender {
     const explain = options.explain ?? this.defaultExplain;
     const mapped = this.mapOptionsFilters(options);
     const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, mapped);
-    return this.mapRecommendationsToOriginal(internalRecs, explain);
+    return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
   /**

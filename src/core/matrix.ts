@@ -19,6 +19,7 @@ export class SparseMatrix<
   TItem extends string | number = string,
 > {
   private readonly useIntegerMapping: boolean;
+  private readonly maxUserProfileSize: number | undefined;
   private readonly userToIdx = new Map<string, number>();
   private readonly idxToUser: string[] = [];
   private readonly itemToIdx = new Map<string, number>();
@@ -42,8 +43,9 @@ export class SparseMatrix<
     Array<{ itemId: any; timestamp: number }>
   >();
 
-  constructor(options: { useIntegerMapping?: boolean } = {}) {
+  constructor(options: { useIntegerMapping?: boolean; maxUserProfileSize?: number | undefined } = {}) {
     this.useIntegerMapping = options.useIntegerMapping ?? false;
+    this.maxUserProfileSize = options.maxUserProfileSize;
   }
 
   public getOriginalItemId(iIdx: any): string {
@@ -192,6 +194,60 @@ export class SparseMatrix<
         }
 
         history.splice(insertIdx, 0, { itemId, timestamp: timestampMs });
+      }
+    }
+
+    this.pruneUserProfile(userId);
+  }
+
+  private pruneUserProfile(userId: any): void {
+    if (this.maxUserProfileSize === undefined) return;
+    const userVector = this.storage.get(userId);
+    if (!userVector || userVector.size <= this.maxUserProfileSize) return;
+
+    // 1. Determine oldest item ID
+    let oldestItemId: any = undefined;
+    const history = this.userHistory.get(userId);
+    if (history && history.length > 0) {
+      oldestItemId = history[0]!.itemId;
+    } else {
+      oldestItemId = userVector.keys().next().value;
+    }
+
+    if (oldestItemId === undefined) return;
+
+    // 2. Remove oldest item from userVector
+    userVector.delete(oldestItemId);
+    invalidateVectorCache(userVector);
+    this.interactionCount--;
+
+    // 3. Decrement ratings count
+    const count = this.ratingsCount.get(oldestItemId) ?? 0;
+    if (count <= 1) {
+      this.ratingsCount.delete(oldestItemId);
+      this.itemIndex.delete(oldestItemId);
+      this.itemCategories.delete(oldestItemId);
+      this.itemTags.delete(oldestItemId);
+    } else {
+      this.ratingsCount.set(oldestItemId, count - 1);
+    }
+
+    // 4. Remove from transpose
+    const itemVector = this.transpose.get(oldestItemId);
+    if (itemVector) {
+      invalidateVectorCache(itemVector);
+      itemVector.delete(userId);
+      if (itemVector.size === 0) {
+        this.transpose.delete(oldestItemId);
+      }
+    }
+
+    // 5. Update history and transitions if applicable
+    if (history && history.length > 0 && history[0]!.itemId === oldestItemId) {
+      const evicted = history.shift()!;
+      if (history.length > 0) {
+        // Decrement transition probability
+        this.recordTransition(evicted.itemId, history[0]!.itemId, -1);
       }
     }
   }

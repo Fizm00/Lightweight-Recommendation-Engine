@@ -28,6 +28,8 @@ export interface GenericRecommendationReason<TUser extends string | number = str
   readonly ratingGiven?: number;
   /** The explanation description in plain English text. */
   readonly explanation: string;
+  /** The recommendation strategy or reason type. */
+  readonly strategy?: string;
 }
 
 export interface RecommendationReason extends GenericRecommendationReason<string, string> {}
@@ -108,6 +110,8 @@ export interface SessionRecommendationOptions {
   readonly minIntersectionSize?: number;
   /** Optional neighborhood limit (k) to use in similarity calculations. */
   readonly k?: number;
+  /** Optional custom explanation formatter function. */
+  readonly explanationFormatter?: ExplanationFormatter;
 }
 
 /**
@@ -119,4 +123,6 @@ export interface RecommenderState {
   /** The serialized state of the sparse matrix. */
   readonly matrix: SerializedMatrixState;
 }
+
+export type ExplanationFormatter = (reason: RecommendationReason) => string;
 

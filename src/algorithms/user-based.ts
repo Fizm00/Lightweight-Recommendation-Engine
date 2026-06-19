@@ -147,6 +147,7 @@ function scoreCandidateUB<TUser extends string | number, TItem extends string | 
         similarity: c.sim,
         ratingGiven: c.rating,
         explanation: `Because similar user ${String(c.userId)} rated it ${c.rating}`,
+        strategy: "user-based",
       }));
   }
 

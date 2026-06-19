@@ -130,6 +130,7 @@ function scoreCandidate<TUser extends string | number, TItem extends string | nu
       similarity: n.sim,
       ratingGiven: n.rating,
       explanation: `Because you liked item ${n.itemId}`,
+      strategy: "item-based",
     }));
   }
 

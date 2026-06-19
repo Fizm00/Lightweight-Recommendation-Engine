@@ -185,3 +185,113 @@ test("Dev Experience - Strategy Auto-routing", () => {
   );
   assert.ok(hasItemBasedExplanation, "Should auto-route focused user to item-based CF");
 });
+
+test("Dev Experience - maxUserProfileSize Pruning", () => {
+  const recommender = new NanoRecommender({
+    maxUserProfileSize: 3,
+  });
+
+  recommender.addInteraction({ userId: "u1", itemId: "i1", rating: 5 });
+  recommender.addInteraction({ userId: "u1", itemId: "i2", rating: 4 });
+  recommender.addInteraction({ userId: "u1", itemId: "i3", rating: 3 });
+
+  // Currently has 3 interactions for u1
+  let stats = recommender.stats();
+  assert.strictEqual(stats.interactionCount, 3);
+
+  // Add a 4th interaction, which should trigger eviction of the oldest (i1)
+  recommender.addInteraction({ userId: "u1", itemId: "i4", rating: 2 });
+
+  stats = recommender.stats();
+  // Total interaction count across all users/items is still 3 because i1 got evicted
+  assert.strictEqual(stats.interactionCount, 3);
+
+  // Check u1's vector in the matrix:
+  const uIdx = recommender["matrix"].lookupInternalUser("u1");
+  assert.ok(uIdx !== undefined);
+  const userVector = recommender["matrix"].getUserVector(uIdx);
+  assert.ok(userVector !== undefined);
+  assert.strictEqual(userVector.size, 3);
+  assert.ok(!userVector.has(recommender["matrix"].lookupInternalItem("i1")));
+  assert.ok(userVector.has(recommender["matrix"].lookupInternalItem("i2")));
+  assert.ok(userVector.has(recommender["matrix"].lookupInternalItem("i3")));
+  assert.ok(userVector.has(recommender["matrix"].lookupInternalItem("i4")));
+});
+
+test("Dev Experience - Explanation Formatter (i18n)", () => {
+  const recommender = new NanoRecommender({
+    defaultStrategy: "item-based",
+    explanationFormatter: (reason) => {
+      // Custom localized formatter
+      if (reason.triggerItemId) {
+        return `Karena Anda menyukai produk ${reason.triggerItemId} (Skor: ${reason.similarity.toFixed(2)})`;
+      }
+      return reason.explanation;
+    }
+  });
+
+  recommender.load([
+    { userId: "u1", itemId: "i1", rating: 5 },
+    { userId: "u1", itemId: "i2", rating: 4 },
+    { userId: "u2", itemId: "i1", rating: 5 },
+    { userId: "u2", itemId: "i3", rating: 4 },
+  ]);
+
+  const recs = recommender.recommend("u1", { explain: true });
+  assert.ok(recs.length > 0);
+  const firstRec = recs[0];
+  assert.ok(firstRec);
+  assert.ok(firstRec.reasons && firstRec.reasons.length > 0);
+  const explanation = firstRec.reasons[0]?.explanation;
+  assert.ok(explanation);
+  assert.ok(explanation.startsWith("Karena Anda menyukai produk i1"));
+
+  // Override formatter in query options
+  const recsQueryOverride = recommender.recommend("u1", {
+    explain: true,
+    explanationFormatter: (reason) => {
+      if (reason.triggerItemId) {
+        return `Trigger: ${reason.triggerItemId}`;
+      }
+      return reason.explanation;
+    }
+  });
+  assert.ok(recsQueryOverride.length > 0);
+  const firstOverride = recsQueryOverride[0];
+  assert.ok(firstOverride);
+  assert.strictEqual(firstOverride.reasons?.[0]?.explanation, "Trigger: i1");
+});
+
+test("Dev Experience - WASM Strategy and Auto-routing", async () => {
+  const { shouldWasmAccelerate, setWasmStrategy, setWasmMinVectorSize, loadWasm } = await import("../wasm/loader.js");
+
+  // Load WASM to ensure isLoaded is true
+  await loadWasm();
+
+  const vec1 = new Map<any, number>([[1, 5], [2, 4]]);
+  const vec2 = new Map<any, number>([[1, 5], [2, 4], [3, 3], [4, 2], [5, 1]]);
+
+  // 1. auto with wasmMinVectorSize = 5
+  setWasmStrategy("auto");
+  setWasmMinVectorSize(5);
+
+  // one vector size is 2 < 5, so should be false
+  assert.strictEqual(shouldWasmAccelerate(vec1, vec2), false);
+
+  // both vectors have size >= 5
+  const vec3 = new Map<any, number>([[1, 5], [2, 4], [3, 3], [4, 2], [5, 1], [6, 2]]);
+  assert.strictEqual(shouldWasmAccelerate(vec2, vec3), true);
+
+  // 2. always strategy
+  setWasmStrategy("always");
+  assert.strictEqual(shouldWasmAccelerate(vec1, vec2), true);
+
+  // 3. never strategy
+  setWasmStrategy("never");
+  assert.strictEqual(shouldWasmAccelerate(vec2, vec3), false);
+
+  // Reset strategy to auto
+  setWasmStrategy("auto");
+  setWasmMinVectorSize(20);
+});
+

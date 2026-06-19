@@ -59,6 +59,43 @@ export function setWasmEnabled(enabled: boolean): void {
   isEnabled = enabled;
 }
 
+let wasmStrategy: "auto" | "always" | "never" = "auto";
+let wasmMinVectorSize = 20;
+
+export function setWasmStrategy(strategy: "auto" | "always" | "never"): void {
+  wasmStrategy = strategy;
+}
+
+export function getWasmStrategy(): "auto" | "always" | "never" {
+  return wasmStrategy;
+}
+
+export function setWasmMinVectorSize(size: number): void {
+  wasmMinVectorSize = size;
+}
+
+export function getWasmMinVectorSize(): number {
+  return wasmMinVectorSize;
+}
+
+/**
+ * Determines whether WebAssembly should be used to accelerate vector similarity calculations.
+ */
+export function shouldWasmAccelerate(
+  vectorA: ReadonlyMap<any, number>,
+  vectorB: ReadonlyMap<any, number>
+): boolean {
+  if (!isLoaded || !isEnabled) return false;
+  if (wasmStrategy === "never") return false;
+  if (wasmStrategy === "always") return true;
+
+  // 'auto' strategy: fallback to JS if either vector is too small/sparse
+  if (vectorA.size < wasmMinVectorSize || vectorB.size < wasmMinVectorSize) {
+    return false;
+  }
+  return true;
+}
+
 export {
   cosine_similarity,
   jaccard_similarity,

@@ -1,6 +1,6 @@
 import { intersectionSize } from "./math.js";
 import type { SimilarityFunction } from "./similarity.js";
-import { isWasmLoaded, jaccard_similarity, mapToWasmVectors } from "../wasm/loader.js";
+import { shouldWasmAccelerate, jaccard_similarity, mapToWasmVectors } from "../wasm/loader.js";
 
 /**
  * Calculates the Jaccard Similarity coefficient between the key sets of two sparse vectors.
@@ -13,7 +13,7 @@ import { isWasmLoaded, jaccard_similarity, mapToWasmVectors } from "../wasm/load
  * @returns The Jaccard similarity coefficient score.
  */
 export const jaccardSimilarity: SimilarityFunction = (vectorA, vectorB, minIntersectionSize) => {
-  if (isWasmLoaded()) {
+  if (shouldWasmAccelerate(vectorA, vectorB)) {
     try {
       const [keysA, , keysB] = mapToWasmVectors(vectorA, vectorB);
       return jaccard_similarity(keysA, keysB, minIntersectionSize ?? 1);

@@ -171,6 +171,7 @@ export function recommendContentBasedForVector<TUser extends string | number = s
         similarity: n.sim,
         ratingGiven: n.rating,
         explanation: `Because you interacted with item ${String(n.itemId)} which has similar content (${(n.sim * 100).toFixed(0)}% match)`,
+        strategy: "content-based",
       }));
     }
 

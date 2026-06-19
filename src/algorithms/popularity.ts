@@ -36,7 +36,7 @@ export function getMostRated<TUser extends string | number = string, TItem exten
     recommendations.push({
       itemId,
       score: count,
-      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most rated items" }] } : {}),
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most rated items", strategy: "popularity-rated" }] } : {}),
     });
   }
   return sortAndLimit(recommendations, limit);
@@ -76,7 +76,7 @@ export function getMostViewed<TUser extends string | number = string, TItem exte
     recommendations.push({
       itemId,
       score: count,
-      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most viewed items" }] } : {}),
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most viewed items", strategy: "popularity-viewed" }] } : {}),
     });
   }
   return sortAndLimit(recommendations, limit);
@@ -116,7 +116,7 @@ export function getMostPurchased<TUser extends string | number = string, TItem e
     recommendations.push({
       itemId,
       score: count,
-      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most purchased items" }] } : {}),
+      ...(options.explain ? { reasons: [{ similarity: 1.0, explanation: "One of the most purchased items", strategy: "popularity-purchased" }] } : {}),
     });
   }
   return sortAndLimit(recommendations, limit);
