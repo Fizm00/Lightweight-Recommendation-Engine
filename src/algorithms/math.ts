@@ -4,12 +4,32 @@
  * @param vector The sparse vector representation.
  * @returns The Euclidean magnitude of the vector.
  */
+const magnitudeCache = new WeakMap<ReadonlyMap<any, number>, number>();
+
+/**
+ * Calculates the Euclidean norm (magnitude) of a sparse vector.
+ *
+ * @param vector The sparse vector representation.
+ * @returns The Euclidean magnitude of the vector.
+ */
 export function calculateMagnitude<T = string | number>(vector: ReadonlyMap<T, number>): number {
+  let mag = magnitudeCache.get(vector);
+  if (mag !== undefined) return mag;
+
   let sumOfSquares = 0;
   for (const rating of vector.values()) {
     sumOfSquares += rating * rating;
   }
-  return Math.sqrt(sumOfSquares);
+  mag = Math.sqrt(sumOfSquares);
+  magnitudeCache.set(vector, mag);
+  return mag;
+}
+
+/**
+ * Invalidates the cached magnitude for a modified vector.
+ */
+export function invalidateMagnitudeCache(vector: ReadonlyMap<any, number>): void {
+  magnitudeCache.delete(vector);
 }
 
 /**
@@ -123,3 +143,48 @@ export function sharedItems<T = string | number>(
 
   return shared;
 }
+
+const sortedKeysCache = new WeakMap<ReadonlyMap<any, number>, Int32Array>();
+
+/**
+ * Caches and returns a sorted Int32Array of internal IDs (which are numbers) for a sparse vector.
+ */
+export function getSortedKeys(v: ReadonlyMap<any, number>): Int32Array {
+  let keys = sortedKeysCache.get(v);
+  if (!keys) {
+    const entries = Array.from(v.keys()) as number[];
+    entries.sort((a, b) => a - b);
+    keys = new Int32Array(entries);
+    sortedKeysCache.set(v, keys);
+  }
+  return keys;
+}
+
+/**
+ * Invalidates the cached sorted keys for a modified vector.
+ */
+export function invalidateSortedKeysCache(v: ReadonlyMap<any, number>): void {
+  sortedKeysCache.delete(v);
+}
+
+/**
+ * Checks if two sorted Int32Arrays share at least one element using a two-pointer approach.
+ */
+export function hasOverlapSorted(arrA: Int32Array, arrB: Int32Array): boolean {
+  let pA = 0, pB = 0;
+  const lenA = arrA.length, lenB = arrB.length;
+  while (pA < lenA && pB < lenB) {
+    const valA = arrA[pA]!;
+    const valB = arrB[pB]!;
+    if (valA === valB) {
+      return true;
+    }
+    if (valA < valB) {
+      pA++;
+    } else {
+      pB++;
+    }
+  }
+  return false;
+}
+

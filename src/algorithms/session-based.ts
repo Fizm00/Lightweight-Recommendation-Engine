@@ -167,6 +167,7 @@ export function recommendSessionSimilarity<TUser extends string | number = strin
     if (options.filterTags !== undefined) ibOptions.filterTags = options.filterTags;
     if (options.minIntersectionSize !== undefined) ibOptions.minIntersectionSize = options.minIntersectionSize;
     if (options.k !== undefined) ibOptions.k = options.k;
+    if (options.enableApproximateSearch !== undefined) ibOptions.enableApproximateSearch = options.enableApproximateSearch;
 
     recommendations = recommendForUserVector(
       matrix,

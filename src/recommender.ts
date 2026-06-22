@@ -64,6 +64,14 @@ export interface NanoRecommenderConfig {
   readonly wasmMinVectorSize?: number;
   /** Optional custom explanation formatter function. */
   readonly explanationFormatter?: ExplanationFormatter;
+  /** Whether to use approximate nearest neighbor search via LSH by default. Optional. */
+  readonly enableApproximateSearch?: boolean;
+  /** Number of bands for LSH index. Optional. */
+  readonly lshBands?: number;
+  /** Number of rows per band for LSH index. Optional. */
+  readonly lshRows?: number;
+  /** Minimum number of LSH band matches required for a candidate. Optional. */
+  readonly lshMinBandMatches?: number;
 }
 
 /**
@@ -104,6 +112,10 @@ export interface RecommendationOptions extends ItemBasedRecommendationOptions, U
   readonly similarityStrategy?: "item-based" | "content-based";
   /** Optional custom explanation formatter function. */
   readonly explanationFormatter?: ExplanationFormatter;
+  /** Whether to use approximate nearest neighbor search via LSH for this query. Optional. */
+  readonly enableApproximateSearch?: boolean;
+  /** Minimum number of LSH band matches required for a candidate. Optional. */
+  readonly lshMinBandMatches?: number;
 }
 
 /**
@@ -170,6 +182,10 @@ export class NanoRecommender {
   private readonly wasmStrategy: "auto" | "always" | "never";
   private readonly wasmMinVectorSize: number;
   private readonly explanationFormatter: ExplanationFormatter | undefined;
+  private readonly defaultEnableApproximateSearch: boolean;
+  private readonly lshBands?: number;
+  private readonly lshRows?: number;
+  private readonly lshMinBandMatches?: number;
 
   /**
    * Constructs a new NanoRecommender instance.
@@ -234,10 +250,68 @@ export class NanoRecommender {
     }
     this.explanationFormatter = finalConfig.explanationFormatter;
 
-    this.matrix = new SparseMatrix<number, number>({
+    // Parse and validate LSH configs
+    this.defaultEnableApproximateSearch = finalConfig.enableApproximateSearch ?? false;
+    if (finalConfig.enableApproximateSearch !== undefined && typeof finalConfig.enableApproximateSearch !== "boolean") {
+      throw new ValidationError("enableApproximateSearch must be a boolean");
+    }
+
+    if (finalConfig.lshBands !== undefined) {
+      if (
+        typeof finalConfig.lshBands !== "number" ||
+        Number.isNaN(finalConfig.lshBands) ||
+        !Number.isFinite(finalConfig.lshBands) ||
+        !Number.isInteger(finalConfig.lshBands) ||
+        finalConfig.lshBands <= 0
+      ) {
+        throw new ValidationError("lshBands must be a positive integer");
+      }
+      this.lshBands = finalConfig.lshBands;
+    }
+
+    if (finalConfig.lshRows !== undefined) {
+      if (
+        typeof finalConfig.lshRows !== "number" ||
+        Number.isNaN(finalConfig.lshRows) ||
+        !Number.isFinite(finalConfig.lshRows) ||
+        !Number.isInteger(finalConfig.lshRows) ||
+        finalConfig.lshRows <= 0
+      ) {
+        throw new ValidationError("lshRows must be a positive integer");
+      }
+      this.lshRows = finalConfig.lshRows;
+    }
+
+    if (finalConfig.lshMinBandMatches !== undefined) {
+      if (
+        typeof finalConfig.lshMinBandMatches !== "number" ||
+        Number.isNaN(finalConfig.lshMinBandMatches) ||
+        !Number.isFinite(finalConfig.lshMinBandMatches) ||
+        !Number.isInteger(finalConfig.lshMinBandMatches) ||
+        finalConfig.lshMinBandMatches <= 0
+      ) {
+        throw new ValidationError("lshMinBandMatches must be a positive integer");
+      }
+      this.lshMinBandMatches = finalConfig.lshMinBandMatches;
+    }
+
+    const enableApprox = this.defaultEnableApproximateSearch;
+    const lshBands = this.lshBands ?? (enableApprox ? 8 : undefined);
+    const lshRows = this.lshRows ?? (enableApprox ? 8 : undefined);
+
+    const matrixOpts: {
+      useIntegerMapping?: boolean;
+      maxUserProfileSize?: number | undefined;
+      lshBands?: number;
+      lshRows?: number;
+    } = {
       useIntegerMapping: true,
       maxUserProfileSize: this.maxUserProfileSize,
-    });
+    };
+    if (lshBands !== undefined) matrixOpts.lshBands = lshBands;
+    if (lshRows !== undefined) matrixOpts.lshRows = lshRows;
+
+    this.matrix = new SparseMatrix<number, number>(matrixOpts);
 
     this.defaultStrategy = finalConfig.defaultStrategy ?? "item-based";
     this.defaultThreshold = finalConfig.defaultSimilarityThreshold ?? 0.0;
@@ -418,7 +492,9 @@ export class NanoRecommender {
       "k",
       "explain",
       "filterCategory",
-      "filterTags"
+      "filterTags",
+      "enableApproximateSearch",
+      "lshMinBandMatches"
     ];
     const extracted: any = {};
     for (const key of keys) {
@@ -441,7 +517,9 @@ export class NanoRecommender {
       "k",
       "explain",
       "filterCategory",
-      "filterTags"
+      "filterTags",
+      "enableApproximateSearch",
+      "lshMinBandMatches"
     ];
     const extracted: any = {};
     for (const key of keys) {
@@ -728,6 +806,8 @@ export class NanoRecommender {
         if (options.minIntersectionSize !== undefined) sessionOptions.minIntersectionSize = options.minIntersectionSize;
         if (options.k !== undefined) sessionOptions.k = options.k;
         if (options.explanationFormatter !== undefined) sessionOptions.explanationFormatter = options.explanationFormatter;
+        const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
+        sessionOptions.enableApproximateSearch = enableApproximateSearch;
 
         const mappedSessionItemIds = sessionItemIds.map(id => this.matrix.lookupInternalItem(id));
         const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, sessionOptions);
@@ -747,7 +827,8 @@ export class NanoRecommender {
     const threshold = options.similarityThreshold ?? this.defaultThreshold;
     const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
     const k = options.k ?? this.defaultK;
-    const finalOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, ...combinedOptions };
+    const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
+    const finalOptions = { similarityThreshold: threshold, minIntersectionSize: minIntersection, k, enableApproximateSearch, ...combinedOptions };
 
     let resolvedStrategy: "item-based" | "user-based" | "hybrid" | "content-based";
     if (strategy === "auto") {
@@ -979,11 +1060,12 @@ export class NanoRecommender {
     const explain = options.explain ?? this.defaultExplain;
 
     const uIdx = this.matrix.lookupInternalUser(userId);
+    const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
     if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain });
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, limit, { ...options, explain, enableApproximateSearch });
     }
 
-    const internalRecs = this.recommendHybridInternal(uIdx, options);
+    const internalRecs = this.recommendHybridInternal(uIdx, { enableApproximateSearch, ...options });
     return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }
 
@@ -1049,11 +1131,12 @@ export class NanoRecommender {
     this.validateFilteringOptions(options);
 
     const uIdx = this.matrix.lookupInternalUser(userId);
+    const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
     if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, options);
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, { ...options, enableApproximateSearch });
     }
 
-    const mapped = this.mapOptionsFilters(options);
+    const mapped = this.mapOptionsFilters({ enableApproximateSearch, ...options });
     const cleanMapped = this.extractItemBasedOptions(mapped);
     const internalRecs = this.recommendItemBasedInternal(uIdx, cleanMapped);
     return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain, options.explanationFormatter ?? this.explanationFormatter);
@@ -1099,11 +1182,12 @@ export class NanoRecommender {
     this.validateFilteringOptions(options);
 
     const uIdx = this.matrix.lookupInternalUser(userId);
+    const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
     if (uIdx === undefined || !this.matrix.hasUser(uIdx as any)) {
-      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, options);
+      return this.handleColdStart(options.fallbackStrategy ?? this.defaultFallback, options.limit ?? 10, { ...options, enableApproximateSearch });
     }
 
-    const mapped = this.mapOptionsFilters(options);
+    const mapped = this.mapOptionsFilters({ enableApproximateSearch, ...options });
     const cleanMapped = this.extractUserBasedOptions(mapped);
     const internalRecs = this.recommendUserBasedInternal(uIdx, cleanMapped);
     return this.mapRecommendationsToOriginal(internalRecs, options.explain ?? this.defaultExplain, options.explanationFormatter ?? this.explanationFormatter);
@@ -1438,6 +1522,11 @@ export class RecommendationQueryBuilder {
 
   public explain(explain: boolean = true): this {
     (this.options as any).explain = explain;
+    return this;
+  }
+
+  public withApproximateSearch(enable: boolean = true): this {
+    (this.options as any).enableApproximateSearch = enable;
     return this;
   }
 

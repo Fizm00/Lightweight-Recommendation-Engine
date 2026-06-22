@@ -7,6 +7,8 @@ import type {
 } from "../types/index.js";
 import { InvalidInteractionError, ValidationError } from "../errors/index.js";
 import { clearWasmGlobalCache, invalidateVectorCache } from "../wasm/loader.js";
+import { LshIndex } from "./lsh.js";
+import { invalidateMagnitudeCache, invalidateSortedKeysCache } from "../algorithms/math.js";
 
 /**
  * A performance-oriented, in-memory representation of a sparse interaction matrix.
@@ -43,9 +45,25 @@ export class SparseMatrix<
     Array<{ itemId: any; timestamp: number }>
   >();
 
-  constructor(options: { useIntegerMapping?: boolean; maxUserProfileSize?: number | undefined } = {}) {
+  private readonly userLsh: LshIndex | undefined;
+  private readonly itemLsh: LshIndex | undefined;
+  private isBatchLoading = false;
+
+  constructor(options: {
+    useIntegerMapping?: boolean;
+    maxUserProfileSize?: number | undefined;
+    lshBands?: number;
+    lshRows?: number;
+  } = {}) {
     this.useIntegerMapping = options.useIntegerMapping ?? false;
     this.maxUserProfileSize = options.maxUserProfileSize;
+    if (options.lshBands !== undefined || options.lshRows !== undefined) {
+      const lshOpts: { bands?: number; rows?: number } = {};
+      if (options.lshBands !== undefined) lshOpts.bands = options.lshBands;
+      if (options.lshRows !== undefined) lshOpts.rows = options.lshRows;
+      this.userLsh = new LshIndex(lshOpts);
+      this.itemLsh = new LshIndex(lshOpts);
+    }
   }
 
   public getOriginalItemId(iIdx: any): string {
@@ -114,6 +132,8 @@ export class SparseMatrix<
       this.storage.set(userId, userVector);
     } else {
       invalidateVectorCache(userVector);
+      invalidateMagnitudeCache(userVector);
+      invalidateSortedKeysCache(userVector);
     }
 
     const isNew = !userVector.has(itemId);
@@ -132,6 +152,8 @@ export class SparseMatrix<
       this.transpose.set(itemId, itemVector);
     } else {
       invalidateVectorCache(itemVector);
+      invalidateMagnitudeCache(itemVector);
+      invalidateSortedKeysCache(itemVector);
     }
     itemVector.set(userId, rating);
 
@@ -198,6 +220,7 @@ export class SparseMatrix<
     }
 
     this.pruneUserProfile(userId);
+    this.updateLshForInteraction(userId, itemId);
   }
 
   private pruneUserProfile(userId: any): void {
@@ -219,6 +242,8 @@ export class SparseMatrix<
     // 2. Remove oldest item from userVector
     userVector.delete(oldestItemId);
     invalidateVectorCache(userVector);
+    invalidateMagnitudeCache(userVector);
+    invalidateSortedKeysCache(userVector);
     this.interactionCount--;
 
     // 3. Decrement ratings count
@@ -236,6 +261,8 @@ export class SparseMatrix<
     const itemVector = this.transpose.get(oldestItemId);
     if (itemVector) {
       invalidateVectorCache(itemVector);
+      invalidateMagnitudeCache(itemVector);
+      invalidateSortedKeysCache(itemVector);
       itemVector.delete(userId);
       if (itemVector.size === 0) {
         this.transpose.delete(oldestItemId);
@@ -250,6 +277,126 @@ export class SparseMatrix<
         this.recordTransition(evicted.itemId, history[0]!.itemId, -1);
       }
     }
+
+    if (!this.isBatchLoading && this.itemLsh && oldestItemId !== undefined) {
+      const itemVector = this.transpose.get(oldestItemId);
+      if (itemVector && itemVector.size > 0) {
+        this.itemLsh.update(oldestItemId, itemVector);
+      } else {
+        this.itemLsh.remove(oldestItemId);
+      }
+    }
+  }
+
+  private updateLshForInteraction(userId: any, itemId: any): void {
+    if (this.isBatchLoading) return;
+    if (this.userLsh) {
+      const userVector = this.storage.get(userId);
+      if (userVector && userVector.size > 0) {
+        this.userLsh.update(userId, userVector);
+      } else {
+        this.userLsh.remove(userId);
+      }
+    }
+    if (this.itemLsh) {
+      const itemVector = this.transpose.get(itemId);
+      if (itemVector && itemVector.size > 0) {
+        this.itemLsh.update(itemId, itemVector);
+      } else {
+        this.itemLsh.remove(itemId);
+      }
+    }
+  }
+
+  public rebuildLshIndices(): void {
+    if (this.userLsh) {
+      this.userLsh.clear();
+      for (const [u, vector] of this.storage.entries()) {
+        if (vector.size > 0) {
+          this.userLsh.update(u, vector);
+        }
+      }
+    }
+    if (this.itemLsh) {
+      this.itemLsh.clear();
+      for (const [i, vector] of this.transpose.entries()) {
+        if (vector.size > 0) {
+          this.itemLsh.update(i, vector);
+        }
+      }
+    }
+  }
+
+  public getUserLshCandidates(userId: TUser, minMatches = 1): Set<TUser> {
+    const internalCandidates = this.getUserLshCandidatesInternal(userId, minMatches);
+    const candidates = new Set<TUser>();
+    const u = this.lookupInternalUser(userId);
+    if (this.useIntegerMapping) {
+      for (const idx of internalCandidates) {
+        if (idx !== u) {
+          candidates.add(this.idxToUser[idx] as any);
+        }
+      }
+    } else {
+      for (const idx of internalCandidates) {
+        if (idx !== userId) {
+          candidates.add(idx);
+        }
+      }
+    }
+    return candidates;
+  }
+
+  public getUserLshCandidatesInternal(userId: any, minMatches = 1): Set<any> {
+    if (!this.userLsh) return new Set();
+    const u = this.lookupInternalUser(userId);
+    if (u === undefined) return new Set();
+    const vector = this.storage.get(u);
+    if (!vector) return new Set();
+    const candidates = this.userLsh.getCandidates(vector, minMatches);
+    const result = new Set<any>();
+    for (const c of candidates) {
+      if (c !== u) {
+        result.add(c);
+      }
+    }
+    return result;
+  }
+
+  public getItemLshCandidates(itemId: TItem, minMatches = 1): Set<TItem> {
+    const internalCandidates = this.getItemLshCandidatesInternal(itemId, minMatches);
+    const candidates = new Set<TItem>();
+    const i = this.lookupInternalItem(itemId);
+    if (this.useIntegerMapping) {
+      for (const idx of internalCandidates) {
+        if (idx !== i) {
+          candidates.add(this.idxToItem[idx] as any);
+        }
+      }
+    } else {
+      for (const idx of internalCandidates) {
+        if (idx !== itemId) {
+          candidates.add(idx);
+        }
+      }
+    }
+    return candidates;
+  }
+
+  public getItemLshCandidatesInternal(itemId: any, minMatches = 1): Set<any> {
+    if (!this.itemLsh) return new Set();
+    const i = this.lookupInternalItem(itemId);
+    if (i === undefined) return new Set();
+    const vector = this.transpose.get(i);
+    if (!vector) return new Set();
+    const candidates = this.itemLsh.getCandidates(vector, minMatches);
+    const result = new Set<any>();
+    for (const c of candidates) {
+      if (c !== i) {
+        result.add(c);
+      }
+    }
+    return result;
   }
 
   /**
@@ -359,15 +506,26 @@ export class SparseMatrix<
       throw new ValidationError("interactions must be an array");
     }
 
-    // Sort interactions by timestamp ascending to ensure sequential transitions are processed in order
-    const sorted = [...interactions].sort((a, b) => {
-      const tA = this.parseTimestamp(a.timestamp) ?? 0;
-      const tB = this.parseTimestamp(b.timestamp) ?? 0;
-      return tA - tB;
-    });
+    const wasBatch = this.isBatchLoading;
+    this.isBatchLoading = true;
 
-    for (const interaction of sorted) {
-      this.addInteraction(interaction);
+    try {
+      // Sort interactions by timestamp ascending to ensure sequential transitions are processed in order
+      const sorted = [...interactions].sort((a, b) => {
+        const tA = this.parseTimestamp(a.timestamp) ?? 0;
+        const tB = this.parseTimestamp(b.timestamp) ?? 0;
+        return tA - tB;
+      });
+
+      for (const interaction of sorted) {
+        this.addInteraction(interaction);
+      }
+    } finally {
+      this.isBatchLoading = wasBatch;
+    }
+
+    if (!this.isBatchLoading) {
+      this.rebuildLshIndices();
     }
   }
 
@@ -1140,6 +1298,7 @@ export class SparseMatrix<
           }
         }
       }
+      this.rebuildLshIndices();
     } catch (error) {
       this.clear(); // Clean up partial state if error occurs
       if (error instanceof ValidationError) {

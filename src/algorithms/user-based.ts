@@ -31,6 +31,8 @@ export interface UserBasedRecommendationOptions<TItem extends string | number = 
   readonly filterCategory?: string;
   /** Optional tags to filter item recommendations by (matches items having at least one of these tags). */
   readonly filterTags?: string[];
+  /** Whether to use approximate nearest neighbor search via LSH. */
+  readonly enableApproximateSearch?: boolean;
 }
 
 /**
@@ -193,7 +195,9 @@ export function recommendFromSimilarUsers<TUser extends string | number = string
   if (!userVector || userVector.size === 0) return [];
 
   const transpose = buildTransposeMatrix(matrix);
-  const similarUsers = findSimilarUsers(userVector, transpose, userId);
+  const similarUsers = options.enableApproximateSearch
+    ? (matrix as any).getUserLshCandidatesInternal(userId)
+    : findSimilarUsers(userVector, transpose, userId);
   const userSimilarities = computeUserSimilarities(
     userId,
     userVector,

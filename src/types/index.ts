@@ -112,6 +112,8 @@ export interface SessionRecommendationOptions {
   readonly k?: number;
   /** Optional custom explanation formatter function. */
   readonly explanationFormatter?: ExplanationFormatter;
+  /** Whether to use approximate nearest neighbor search via LSH. Optional. */
+  readonly enableApproximateSearch?: boolean;
 }
 
 /**
