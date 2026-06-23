@@ -211,3 +211,89 @@ test("Session-Based - Validation and error handling", () => {
     recommender.recommendSession(["i1"], { similarityStrategy: "unknown" as any });
   }, ValidationError);
 });
+
+test("Session-Based - recommendSession option propagation and default merging", () => {
+  const recommender = new NanoRecommender({
+    defaultSimilarityThreshold: 0.8,
+    defaultMinIntersectionSize: 2,
+    defaultContentCategoryWeight: 0.7,
+    defaultContentTagWeight: 0.3,
+  });
+
+  recommender.load([
+    // Category metadata
+    { userId: "u1", itemId: "i1", rating: 5.0, itemCategory: "catA", itemTags: ["tag1", "tag2"] },
+    { userId: "u1", itemId: "i2", rating: 5.0, itemCategory: "catA", itemTags: ["tag1"] },
+    { userId: "u1", itemId: "i3", rating: 5.0, itemCategory: "catB", itemTags: ["tag2"] },
+    { userId: "u2", itemId: "i1", rating: 5.0, itemCategory: "catA", itemTags: ["tag1", "tag2"] },
+    { userId: "u2", itemId: "i2", rating: 5.0, itemCategory: "catA", itemTags: ["tag1"] },
+  ]);
+
+  // 1. Verify default similarityThreshold (0.8) and minIntersectionSize (2) are inherited in similarity session-based recommendations
+  const recsDefault = recommender.recommendSession(["i1"], {
+    sessionStrategy: "similarity",
+    similarityStrategy: "item-based",
+  });
+  assert.ok(recsDefault.length > 0);
+  assert.ok(recsDefault.some(r => r.itemId === "i2"));
+
+  // 2. Verify filter and excludeItemIds are respected in similarity strategy
+  const recsFiltered = recommender.recommendSession(["i1"], {
+    sessionStrategy: "similarity",
+    similarityStrategy: "item-based",
+    excludeItemIds: ["i2"],
+  });
+  assert.strictEqual(recsFiltered.some(r => r.itemId === "i2"), false);
+
+  const recsFilterFn = recommender.recommendSession(["i1"], {
+    sessionStrategy: "similarity",
+    similarityStrategy: "item-based",
+    filter: (id) => id !== "i2",
+  });
+  assert.strictEqual(recsFilterFn.some(r => r.itemId === "i2"), false);
+
+  // 3. Verify filter and excludeItemIds are respected in transition strategy
+  const recsTransFiltered = recommender.recommendSession(["i1"], {
+    sessionStrategy: "transition",
+    excludeItemIds: ["i2"],
+  });
+  assert.strictEqual(recsTransFiltered.some(r => r.itemId === "i2"), false);
+
+  // 4. Verify default content category/tag weights are merged in content-based similarity strategy
+  const recsContentDefault = recommender.recommendSession(["i1"], {
+    sessionStrategy: "similarity",
+    similarityStrategy: "content-based",
+  });
+  assert.ok(recsContentDefault.length > 0);
+  assert.ok(recsContentDefault.some(r => r.itemId === "i2"));
+
+  // 5. Verify custom weights in recommendSession overrides defaults and are validated
+  const recsContentCustom = recommender.recommendSession(["i1"], {
+    sessionStrategy: "similarity",
+    similarityStrategy: "content-based",
+    categoryWeight: 0.1,
+    tagWeight: 0.9,
+  });
+  assert.ok(recsContentCustom.length > 0);
+
+  // Check validation for weights summing to 1.0
+  assert.throws(() => {
+    recommender.recommendSession(["i1"], {
+      sessionStrategy: "similarity",
+      similarityStrategy: "content-based",
+      categoryWeight: 0.5,
+      tagWeight: 0.6,
+    });
+  }, ValidationError);
+
+  // Check validation for negative weights
+  assert.throws(() => {
+    recommender.recommendSession(["i1"], {
+      sessionStrategy: "similarity",
+      similarityStrategy: "content-based",
+      categoryWeight: -0.1,
+      tagWeight: 1.1,
+    });
+  }, ValidationError);
+});
+

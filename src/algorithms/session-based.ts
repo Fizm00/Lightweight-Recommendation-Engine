@@ -68,10 +68,14 @@ export function recommendSessionTransition<TUser extends string | number = strin
   }
 
   const recommendations: GenericRecommendation<TItem, TUser>[] = [];
+  const excludeSet = options.excludeItemIds ? new Set(options.excludeItemIds as any) : null;
+  const filterFn = options.filter as any;
 
   for (const [candidateId, score] of candidateScores.entries()) {
     // 1. Exclude items already in the session
     if (sessionSet.has(candidateId)) continue;
+    if (excludeSet && excludeSet.has(candidateId)) continue;
+    if (filterFn && !filterFn(candidateId)) continue;
 
     // 2. Filter by category if specified
     if (options.filterCategory !== undefined && matrix.getItemCategory(candidateId) !== options.filterCategory) {
@@ -151,6 +155,10 @@ export function recommendSessionSimilarity<TUser extends string | number = strin
     if (options.filterCategory !== undefined) cbOptions.filterCategory = options.filterCategory;
     if (options.filterTags !== undefined) cbOptions.filterTags = options.filterTags;
     if (options.k !== undefined) cbOptions.k = options.k;
+    if (options.filter !== undefined) cbOptions.filter = options.filter;
+    if (options.excludeItemIds !== undefined) cbOptions.excludeItemIds = options.excludeItemIds;
+    if ((options as any).categoryWeight !== undefined) cbOptions.categoryWeight = (options as any).categoryWeight;
+    if ((options as any).tagWeight !== undefined) cbOptions.tagWeight = (options as any).tagWeight;
 
     recommendations = recommendContentBasedForVector(
       matrix,
@@ -168,6 +176,8 @@ export function recommendSessionSimilarity<TUser extends string | number = strin
     if (options.minIntersectionSize !== undefined) ibOptions.minIntersectionSize = options.minIntersectionSize;
     if (options.k !== undefined) ibOptions.k = options.k;
     if (options.enableApproximateSearch !== undefined) ibOptions.enableApproximateSearch = options.enableApproximateSearch;
+    if (options.filter !== undefined) ibOptions.filter = options.filter;
+    if (options.excludeItemIds !== undefined) ibOptions.excludeItemIds = options.excludeItemIds;
 
     recommendations = recommendForUserVector(
       matrix,

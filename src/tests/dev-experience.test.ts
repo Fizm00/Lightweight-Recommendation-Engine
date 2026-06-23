@@ -295,3 +295,24 @@ test("Dev Experience - WASM Strategy and Auto-routing", async () => {
   setWasmMinVectorSize(20);
 });
 
+test("Dev Experience - Constructor wasmStrategy options propagation", async () => {
+  const { getWasmStrategy, getWasmMinVectorSize } = await import("../wasm/loader.js");
+  
+  new NanoRecommender({
+    wasmStrategy: "never",
+    wasmMinVectorSize: 100,
+  });
+
+  assert.strictEqual(getWasmStrategy(), "never");
+  assert.strictEqual(getWasmMinVectorSize(), 100);
+  
+  // Reset for subsequent tests
+  new NanoRecommender({
+    wasmStrategy: "auto",
+    wasmMinVectorSize: 20,
+  });
+  assert.strictEqual(getWasmStrategy(), "auto");
+  assert.strictEqual(getWasmMinVectorSize(), 20);
+});
+
+

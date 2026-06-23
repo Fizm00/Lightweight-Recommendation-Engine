@@ -13,10 +13,13 @@ ctx.addEventListener("message", async (event: MessageEvent<WorkerRequest>) => {
     switch (type) {
       case "init": {
         recommender = new NanoRecommender(payload?.config);
-        try {
-          await loadWasm();
-        } catch (err) {
-          // Fallback silently to JS/TS
+        const strategy = payload?.config?.wasmStrategy ?? "auto";
+        if (strategy !== "never") {
+          try {
+            await loadWasm();
+          } catch (err) {
+            // Fallback silently to JS/TS
+          }
         }
         ctx.postMessage({ id, type: "init_success" });
         break;

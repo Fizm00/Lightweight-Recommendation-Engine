@@ -226,8 +226,8 @@ export class NanoRecommender {
       if (finalConfig.wasmStrategy !== "auto" && finalConfig.wasmStrategy !== "always" && finalConfig.wasmStrategy !== "never") {
         throw new ValidationError("wasmStrategy must be 'auto', 'always', or 'never'");
       }
-      setWasmStrategy(finalConfig.wasmStrategy);
     }
+    setWasmStrategy(this.wasmStrategy);
 
     // Parse and validate wasmMinVectorSize
     this.wasmMinVectorSize = finalConfig.wasmMinVectorSize ?? 20;
@@ -241,8 +241,8 @@ export class NanoRecommender {
       ) {
         throw new ValidationError("wasmMinVectorSize must be a non-negative integer");
       }
-      setWasmMinVectorSize(finalConfig.wasmMinVectorSize);
     }
+    setWasmMinVectorSize(this.wasmMinVectorSize);
 
     // Parse and validate explanationFormatter
     if (finalConfig.explanationFormatter !== undefined && typeof finalConfig.explanationFormatter !== "function") {
@@ -433,9 +433,11 @@ export class NanoRecommender {
     this.contentCache = new SimilarityCache(maxCacheSize);
     this.contentCache.toInternal = (id) => this.matrix.toInternalItem(id);
 
-    loadWasm().catch(() => {
-      // Fallback silently
-    });
+    if (this.wasmStrategy !== "never") {
+      loadWasm().catch(() => {
+        // Fallback silently
+      });
+    }
   }
 
   /**
@@ -802,15 +804,40 @@ export class NanoRecommender {
         if (options.filterCategory !== undefined) sessionOptions.filterCategory = options.filterCategory;
         if (options.filterTags !== undefined) sessionOptions.filterTags = options.filterTags;
         if (options.similarityStrategy !== undefined) sessionOptions.similarityStrategy = options.similarityStrategy;
-        if (options.similarityThreshold !== undefined) sessionOptions.similarityThreshold = options.similarityThreshold;
-        if (options.minIntersectionSize !== undefined) sessionOptions.minIntersectionSize = options.minIntersectionSize;
-        if (options.k !== undefined) sessionOptions.k = options.k;
+        
+        sessionOptions.similarityThreshold = options.similarityThreshold ?? this.defaultThreshold;
+        sessionOptions.minIntersectionSize = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
+        sessionOptions.k = options.k ?? this.defaultK;
+        sessionOptions.enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
+        
+        let catW = options.categoryWeight;
+        let tagW = options.tagWeight;
+        if (catW !== undefined && tagW !== undefined) {
+          if (Math.abs(catW + tagW - 1.0) > 1e-9) {
+            throw new ValidationError("categoryWeight and tagWeight must sum to 1.0");
+          }
+        } else if (catW !== undefined) {
+          tagW = 1.0 - catW;
+        } else if (tagW !== undefined) {
+          catW = 1.0 - tagW;
+        } else {
+          catW = this.defaultContentCategoryWeight;
+          tagW = this.defaultContentTagWeight;
+        }
+        sessionOptions.categoryWeight = catW;
+        sessionOptions.tagWeight = tagW;
+
         if (options.explanationFormatter !== undefined) sessionOptions.explanationFormatter = options.explanationFormatter;
-        const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
-        sessionOptions.enableApproximateSearch = enableApproximateSearch;
+
+        const finalSessionOptions = {
+          ...sessionOptions,
+          filter: options.filter,
+          excludeItemIds: options.excludeItemIds,
+        };
+        const mapped = this.mapOptionsFilters(finalSessionOptions);
 
         const mappedSessionItemIds = sessionItemIds.map(id => this.matrix.lookupInternalItem(id));
-        const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, sessionOptions);
+        const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, mapped);
         return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
       }
     }
@@ -1315,6 +1342,10 @@ export class NanoRecommender {
       mappedSessionItemIds.push(iIdx);
     }
 
+    if (options.explain !== undefined && typeof options.explain !== "boolean") {
+      throw new ValidationError("explain must be a boolean");
+    }
+
     const strategy = options.sessionStrategy ?? "similarity";
     if (strategy !== "transition" && strategy !== "similarity") {
       throw new ValidationError(`Unknown session strategy: ${strategy}`);
@@ -1338,10 +1369,48 @@ export class NanoRecommender {
       }
     }
 
+    let catW = options.categoryWeight;
+    let tagW = options.tagWeight;
+    if (catW !== undefined) {
+      if (typeof catW !== "number" || Number.isNaN(catW) || catW < 0.0 || catW > 1.0) {
+        throw new ValidationError("categoryWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (tagW !== undefined) {
+      if (typeof tagW !== "number" || Number.isNaN(tagW) || tagW < 0.0 || tagW > 1.0) {
+        throw new ValidationError("tagWeight must be a number between 0.0 and 1.0");
+      }
+    }
+    if (catW !== undefined && tagW !== undefined) {
+      if (Math.abs(catW + tagW - 1.0) > 1e-9) {
+        throw new ValidationError("categoryWeight and tagWeight must sum to 1.0");
+      }
+    } else if (catW !== undefined) {
+      tagW = 1.0 - catW;
+    } else if (tagW !== undefined) {
+      catW = 1.0 - tagW;
+    } else {
+      catW = this.defaultContentCategoryWeight;
+      tagW = this.defaultContentTagWeight;
+    }
+
+    const threshold = options.similarityThreshold ?? this.defaultThreshold;
+    const minIntersection = options.minIntersectionSize ?? this.defaultMinIntersectionSize;
+    const k = options.k ?? this.defaultK;
+    const enableApproximateSearch = options.enableApproximateSearch ?? this.defaultEnableApproximateSearch;
+
     this.validateFilteringOptions(options);
 
     const explain = options.explain ?? this.defaultExplain;
-    const mapped = this.mapOptionsFilters(options);
+    const mapped = this.mapOptionsFilters({
+      similarityThreshold: threshold,
+      minIntersectionSize: minIntersection,
+      k,
+      enableApproximateSearch,
+      categoryWeight: catW,
+      tagWeight: tagW,
+      ...options,
+    });
     const internalRecs = this.recommendSessionInternal(mappedSessionItemIds, mapped);
     return this.mapRecommendationsToOriginal(internalRecs, explain, options.explanationFormatter ?? this.explanationFormatter);
   }

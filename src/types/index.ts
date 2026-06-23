@@ -114,6 +114,14 @@ export interface SessionRecommendationOptions {
   readonly explanationFormatter?: ExplanationFormatter;
   /** Whether to use approximate nearest neighbor search via LSH. Optional. */
   readonly enableApproximateSearch?: boolean;
+  /** Optional filter function to include/exclude item IDs. */
+  readonly filter?: (itemId: string) => boolean;
+  /** Optional array of item IDs to exclude from recommendations. */
+  readonly excludeItemIds?: string[];
+  /** Weight for the category similarity component in content-based similarity. Optional. */
+  readonly categoryWeight?: number;
+  /** Weight for the tags similarity component in content-based similarity. Optional. */
+  readonly tagWeight?: number;
 }
 
 /**
