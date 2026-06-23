@@ -117,3 +117,63 @@ test("K-Nearest Neighbors - Facade Validation & DefaultK", () => {
   const recsOverride = recommender.recommend("u1", { k: 2 });
   assert.strictEqual(recsOverride.length, 2);
 });
+
+test("K-Nearest Neighbors - defaultK Defaulting & Infinity verification", () => {
+  // 1. Verify defaultK defaults to 100
+  const recommenderDefault = new NanoRecommender();
+  assert.strictEqual(recommenderDefault["defaultK"], 100);
+
+  // 2. Verify defaultK can be set to Infinity
+  const recommenderInfinity = new NanoRecommender({ defaultK: Infinity });
+  assert.strictEqual(recommenderInfinity["defaultK"], Infinity);
+
+  // 3. Verify k query validation
+  assert.throws(() => {
+    recommenderDefault.recommend("u1", { k: 0 });
+  }, ValidationError);
+
+  assert.throws(() => {
+    recommenderDefault.recommend("u1", { k: -1 });
+  }, ValidationError);
+
+  assert.throws(() => {
+    recommenderDefault.recommend("u1", { k: 1.5 });
+  }, ValidationError);
+
+  assert.throws(() => {
+    recommenderDefault.recommend("u1", { k: "5" as any });
+  }, ValidationError);
+
+  // k: Infinity is allowed
+  const recs = recommenderDefault.recommend("u1", { k: Infinity });
+  assert.ok(Array.isArray(recs));
+});
+
+test("K-Nearest Neighbors - Large Dataset Performance Warnings", () => {
+  const originalWarn = console.warn;
+  let warnMessage = "";
+  console.warn = (msg) => {
+    warnMessage = msg;
+  };
+
+  try {
+    const recommenderWarning = new NanoRecommender({ defaultK: Infinity }); // maxUserProfileSize undefined, defaultK is Infinity
+    const largeDataset = Array.from({ length: 25000 }, (_, i) => ({
+      userId: `u_${i}`,
+      itemId: "i1",
+      rating: 5,
+    }));
+
+    recommenderWarning.load(largeDataset);
+    assert.ok(warnMessage.includes("Performance Warning"));
+
+    // Reset warning message and test when capped
+    warnMessage = "";
+    const recommenderCapped = new NanoRecommender({ maxUserProfileSize: 50 }); // defaultK is 100 (capped), maxUserProfileSize is 50 (capped)
+    recommenderCapped.load(largeDataset);
+    assert.strictEqual(warnMessage, "");
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+

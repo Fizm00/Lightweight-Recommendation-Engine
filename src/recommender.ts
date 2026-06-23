@@ -339,13 +339,14 @@ export class NanoRecommender {
       if (
         typeof finalConfig.defaultK !== "number" ||
         Number.isNaN(finalConfig.defaultK) ||
-        !Number.isFinite(finalConfig.defaultK) ||
-        !Number.isInteger(finalConfig.defaultK) ||
+        (finalConfig.defaultK !== Infinity && (!Number.isFinite(finalConfig.defaultK) || !Number.isInteger(finalConfig.defaultK))) ||
         finalConfig.defaultK < 1
       ) {
-        throw new ValidationError("defaultK must be a positive integer");
+        throw new ValidationError("defaultK must be a positive integer or Infinity");
       }
       this.defaultK = finalConfig.defaultK;
+    } else {
+      this.defaultK = 100;
     }
 
     if (finalConfig.defaultHybridAlpha !== undefined) {
@@ -689,6 +690,19 @@ export class NanoRecommender {
     this.contentCache.clear();
     this.lastItemMinIntersectionSize = undefined;
     this.lastUserMinIntersectionSize = undefined;
+
+    // Warn the user about performance risks on large datasets if limit parameters are not set
+    if (interactions.length > 20000) {
+      const hasKLimit = this.defaultK !== undefined && this.defaultK !== Infinity;
+      const hasProfileLimit = this.maxUserProfileSize !== undefined;
+      if (!hasKLimit || !hasProfileLimit) {
+        console.warn(
+          `[NanoRecommender] Performance Warning: Loaded a large dataset (${interactions.length.toLocaleString()} interactions) ` +
+          `but ${!hasKLimit ? "defaultK" : ""}${!hasKLimit && !hasProfileLimit ? " and " : ""}${!hasProfileLimit ? "maxUserProfileSize" : ""} ` +
+          `is not set. Without limits, queries on dense profiles or large neighborhoods may experience high latency.`
+        );
+      }
+    }
   }
 
   /**
@@ -1532,7 +1546,7 @@ export class NanoRecommender {
     this.lastUserMinIntersectionSize = undefined;
   }
 
-  private validateFilteringOptions(options: { readonly filterCategory?: string; readonly filterTags?: string[] }): void {
+  private validateFilteringOptions(options: { readonly filterCategory?: string | undefined; readonly filterTags?: string[] | undefined; readonly k?: number | undefined }): void {
     if (options.filterCategory !== undefined) {
       if (typeof options.filterCategory !== "string" || options.filterCategory.trim() === "") {
         throw new ValidationError("filterCategory must be a non-empty string");
@@ -1546,6 +1560,16 @@ export class NanoRecommender {
         if (typeof tag !== "string" || tag.trim() === "") {
           throw new ValidationError("Each tag in filterTags must be a non-empty string");
         }
+      }
+    }
+    if (options.k !== undefined) {
+      if (
+        typeof options.k !== "number" ||
+        Number.isNaN(options.k) ||
+        (options.k !== Infinity && (!Number.isFinite(options.k) || !Number.isInteger(options.k))) ||
+        options.k < 1
+      ) {
+        throw new ValidationError("k must be a positive integer or Infinity");
       }
     }
   }
