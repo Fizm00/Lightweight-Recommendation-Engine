@@ -65,28 +65,39 @@ function getSampleUserIds(numUsers: number, sampleSize = 100): string[] {
 }
 
 /**
- * Measures recommendation latency stats over a list of users.
+ * Measures recommendation latency stats over a list of users, averaged over multiple runs.
  */
 function benchmarkRecommendations(
   recommender: NanoRecommender,
   userIds: string[],
-  strategy: "item-based" | "user-based" | "hybrid" | "content-based" | "session-based"
+  strategy: "item-based" | "user-based" | "hybrid" | "content-based" | "session-based",
+  runs = 5
 ): { readonly avgMs: number; readonly p95Ms: number } {
-  const times: number[] = [];
-  for (const userId of userIds) {
-    const t0 = performance.now();
-    if (strategy === "session-based") {
-      recommender.recommendSession(["i_0", "i_1", "i_2"], { limit: 10 });
-    } else {
-      recommender.recommend(userId, { strategy, limit: 10 });
+  const allAvgs: number[] = [];
+  const allP95s: number[] = [];
+
+  for (let r = 0; r < runs; r++) {
+    const times: number[] = [];
+    for (const userId of userIds) {
+      const t0 = performance.now();
+      if (strategy === "session-based") {
+        recommender.recommendSession(["i_0", "i_1", "i_2"], { limit: 10 });
+      } else {
+        recommender.recommend(userId, { strategy, limit: 10 });
+      }
+      const t1 = performance.now();
+      times.push(t1 - t0);
     }
-    const t1 = performance.now();
-    times.push(t1 - t0);
+    times.sort((a, b) => a - b);
+    const sum = times.reduce((a, b) => a + b, 0);
+    const p95Idx = Math.floor(times.length * 0.95);
+    allAvgs.push(sum / times.length);
+    allP95s.push(times[p95Idx] ?? 0);
   }
-  times.sort((a, b) => a - b);
-  const sum = times.reduce((a, b) => a + b, 0);
-  const p95Idx = Math.floor(times.length * 0.95);
-  return { avgMs: sum / times.length, p95Ms: times[p95Idx] ?? 0 };
+
+  const avgSum = allAvgs.reduce((a, b) => a + b, 0) / runs;
+  const p95Sum = allP95s.reduce((a, b) => a + b, 0) / runs;
+  return { avgMs: avgSum, p95Ms: p95Sum };
 }
 
 /**
